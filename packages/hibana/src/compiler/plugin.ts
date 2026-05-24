@@ -1,16 +1,14 @@
 import type { PluginObj } from "@babel/core";
 import * as t from "@babel/types";
-import { HIB_RENDER_LABEL } from "./transform-render.ts";
+import { HIB_COMPONENT_MARKER } from "./transform-component.ts";
 
 /**
  * Babel plugin: pre-processed Pattern 3 syntax を JS に降ろす。
  *
- * 入力 (transform-component / transform-render 後):
- *   function Counter() {
+ * 入力 (transform-component 後):
+ *   /* @hib-component *\/ function Counter() {
  *     const count = new Signal(0)
- *     __HIB_RENDER__: {
- *       <button>Count: {count.value}</button>
- *     }
+ *     <button>Count: {count.value}</button>
  *   }
  *
  * 出力:
@@ -20,10 +18,12 @@ import { HIB_RENDER_LABEL } from "./transform-render.ts";
  *   }
  *
  * 変換ルール:
- *   1. `__HIB_RENDER__: { stmts; expr }` → `stmts; return expr` (LabeledStatement)
- *   2. render scope 内の JSX child expression を thunk 化:
+ *   1. `@hib-component` marker を持つ FunctionDeclaration の body 末尾
+ *      ExpressionStatement を ReturnStatement に昇格 (do-block 化)。
+ *      `component Foo() { ... }` 全体が do-block として振る舞う。
+ *   2. component scope 内の JSX child expression を thunk 化:
  *      `{count.value}` → `{() => count.value}` (signal binding)
- *   3. render scope 内の JSX attribute expression も thunk 化、 ただし以下は例外:
+ *   3. component scope 内の JSX attribute expression も thunk 化、 ただし以下は例外:
  *      - `on*` event handler (`onClick={...}`) → そのまま (1 回 attach)
  *      - `ref={...}` → そのまま (callback ref)
  *      - 既に function literal (`{() => x}`) → そのまま (二重 thunk 化を避ける)
@@ -33,29 +33,42 @@ export default function pattern3Plugin(): PluginObj {
   return {
     name: "hibana-pattern3",
     visitor: {
-      LabeledStatement(path) {
-        if (path.node.label.name !== HIB_RENDER_LABEL) return;
+      FunctionDeclaration(path) {
+        if (!hasComponentMarker(path.node)) return;
 
-        const block = path.node.body;
-        if (!t.isBlockStatement(block)) return;
+        const body = path.node.body.body;
+        if (body.length === 0) return;
 
-        // block 内の最後の ExpressionStatement を return に変換、
-        // 前の文 (setup 系) はそのまま残す
-        const stmts = block.body;
-        const last = stmts[stmts.length - 1];
-        if (!t.isExpressionStatement(last)) {
-          throw path.buildCodeFrameError("render { } の最後は JSX 式である必要があります");
+        const last = body[body.length - 1];
+        // 最後が ExpressionStatement なら return に昇格、 そうでない (return 等が既にある)
+        // ならそのまま (do-block semantics: 最後の式が暗黙 return)
+        if (t.isExpressionStatement(last)) {
+          if (t.isJSXElement(last.expression) || t.isJSXFragment(last.expression)) {
+            thunkifyJsx(last.expression);
+          }
+          body[body.length - 1] = t.returnStatement(last.expression);
         }
 
-        // 最後の expression が JSX なら thunk 化を適用
-        if (t.isJSXElement(last.expression) || t.isJSXFragment(last.expression)) {
-          thunkifyJsx(last.expression);
-        }
-
-        path.replaceWithMultiple([...stmts.slice(0, -1), t.returnStatement(last.expression)]);
+        // marker comment は出力に残したくないので除去
+        stripComponentMarker(path.node);
       },
     },
   };
+}
+
+function hasComponentMarker(node: t.FunctionDeclaration): boolean {
+  return node.leadingComments?.some((c) => c.value.includes(HIB_COMPONENT_MARKER)) ?? false;
+}
+
+function stripComponentMarker(node: t.FunctionDeclaration): void {
+  if (!node.leadingComments) return;
+  node.leadingComments = node.leadingComments.filter(
+    (c) => !c.value.includes(HIB_COMPONENT_MARKER),
+  );
+  if (node.leadingComments.length === 0) {
+    // Babel が空配列でも余計な空コメント枠を残すことがあるので null 化
+    node.leadingComments = null;
+  }
 }
 
 /** JSX tree の expression container を thunk 化する (再帰)。 */

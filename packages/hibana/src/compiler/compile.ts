@@ -3,7 +3,6 @@ import { parse } from "@babel/parser";
 import _traverse, { type TraverseOptions } from "@babel/traverse";
 import pattern3Plugin from "./plugin.ts";
 import { transformComponent } from "./transform-component.ts";
-import { transformRender } from "./transform-render.ts";
 
 // Babel パッケージの CJS interop: bundler によっては `.default` 経由でしか取れない
 // (Solid / Vite plugin 等で同じ workaround を採用)。
@@ -19,14 +18,14 @@ const traverse = ((_traverse as any).default ?? _traverse) as typeof _traverse;
  * Pattern 3 syntax (.tsx) を JS に compile する。
  *
  * パイプライン:
- *   1. transform-component (string): `component Foo(` → `function Foo(`
- *   2. transform-render (string): `render { }` → `__HIB_RENDER__: { }`
- *   3. Babel parse + pattern3Plugin: labeled statement を return に、 JSX 内 expression を thunk 化
- *   4. Babel generate: AST → JS string
+ *   1. transform-component (string): `component Foo(` →
+ *      `/* @hib-component *\/ function Foo(`
+ *   2. Babel parse + pattern3Plugin: marker 付き function の body 末尾を
+ *      ReturnStatement に昇格 (do-block 化) + JSX 内 expression を thunk 化
+ *   3. Babel generate: AST → JS string
  */
 export function compile(source: string): string {
-  let code = transformComponent(source);
-  code = transformRender(code);
+  const code = transformComponent(source);
 
   const ast = parse(code, {
     sourceType: "module",
