@@ -6,6 +6,9 @@ settings:
 
 catalogs:
   default:
+    happy-dom:
+      specifier: ^20.9.0
+      version: 20.9.0
     vite-plus:
       specifier: latest
       version: 0.1.22
@@ -20,7 +23,7 @@ importers:
     devDependencies:
       vite-plus:
         specifier: 'catalog:'
-        version: 0.1.22(@types/node@25.9.1)(jiti@2.7.0)(typescript@6.0.3)(vite@8.0.14(@types/node@25.9.1)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)
+        version: 0.1.22(@types/node@25.9.1)(happy-dom@20.9.0)(jiti@2.7.0)(typescript@6.0.3)(vite@8.0.14(@types/node@25.9.1)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)
 
   apps/playground:
     devDependencies:
@@ -32,7 +35,7 @@ importers:
         version: '@voidzero-dev/vite-plus-core@0.1.22(@types/node@25.9.1)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0)'
       vite-plus:
         specifier: 'catalog:'
-        version: 0.1.22(@types/node@25.9.1)(@voidzero-dev/vite-plus-core@0.1.22(@types/node@25.9.1)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0)
+        version: 0.1.22(@types/node@25.9.1)(@voidzero-dev/vite-plus-core@0.1.22(@types/node@25.9.1)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0))(happy-dom@20.9.0)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0)
 
   packages/hibana:
     devDependencies:
@@ -45,15 +48,18 @@ importers:
       bumpp:
         specifier: ^11.1.0
         version: 11.1.0
+      happy-dom:
+        specifier: 'catalog:'
+        version: 20.9.0
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
       vite-plus:
         specifier: 'catalog:'
-        version: 0.1.22(@types/node@25.9.1)(jiti@2.7.0)(typescript@6.0.3)(vite@8.0.14(@types/node@25.9.1)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)
+        version: 0.1.22(@types/node@25.9.1)(happy-dom@20.9.0)(jiti@2.7.0)(typescript@6.0.3)(vite@8.0.14(@types/node@25.9.1)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)
       vitest:
         specifier: npm:@voidzero-dev/vite-plus-test@latest
-        version: '@voidzero-dev/vite-plus-test@0.1.22(@types/node@25.9.1)(jiti@2.7.0)(typescript@6.0.3)(vite@8.0.14(@types/node@25.9.1)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)'
+        version: '@voidzero-dev/vite-plus-test@0.1.22(@types/node@25.9.1)(happy-dom@20.9.0)(jiti@2.7.0)(typescript@6.0.3)(vite@8.0.14(@types/node@25.9.1)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)'
 
 packages:
 
@@ -479,6 +485,12 @@ packages:
   '@types/node@25.9.1':
     resolution: {integrity: sha512-xfrlY7UD5rMJk3ZVJP8BNzS28J36YJg+xp+LPXV1TdWxr8uMH5A860QNxYDGQe/ylDSgjxE52Q9VnO7p75tJxg==}
 
+  '@types/whatwg-mimetype@3.0.2':
+    resolution: {integrity: sha512-c2AKvDT8ToxLIOUlN51gTiHXflsfIFisS4pO7pDPoKouJCESkhZnEy623gwP9laCy5lnLDAw1vAzu2vM2YLOrA==}
+
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
+
   '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260509.2':
     resolution: {integrity: sha512-oG9KahiCpx4q70Ood/rRJhYio4oIMHEHfX0g0LhfenlSIjIonitZWjUmUVG9N9q1ev9QWcM8pWpDrGGP0Osp3Q==}
     engines: {node: '>=16.20.0'}
@@ -695,6 +707,10 @@ packages:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
 
+  entities@7.0.1:
+    resolution: {integrity: sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA==}
+    engines: {node: '>=0.12'}
+
   es-module-lexer@1.7.0:
     resolution: {integrity: sha512-jEQoCwk8hyb2AZziIOLhDqpm5+2ww5uIE6lkO/6jcOCusfk6LhMHpXXfBLXTZ7Ydyt0j4VoUQv6uGNYbdW+kBA==}
 
@@ -711,6 +727,10 @@ packages:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
+
+  happy-dom@20.9.0:
+    resolution: {integrity: sha512-GZZ9mKe8r646NUAf/zemnGbjYh4Bt8/MqASJY+pSm5ZDtc3YQox+4gsLI7yi1hba6o+eCsGxpHn5+iEVn31/FQ==}
+    engines: {node: '>=20.0.0'}
 
   jiti@2.7.0:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
@@ -953,6 +973,10 @@ packages:
         optional: true
       yaml:
         optional: true
+
+  whatwg-mimetype@3.0.0:
+    resolution: {integrity: sha512-nt+N2dzIutVRxARx1nghPKGv1xHikU7HKdfafKkLNLindmPU/ch3U31NOCGGA/dmPcmb1VlofO0vnKAcsm0o/Q==}
+    engines: {node: '>=12'}
 
   ws@8.20.1:
     resolution: {integrity: sha512-It4dO0K5v//JtTXuPkfEOaI3uUN87iYPnqo/ZzqCoG3g8uhA66QUMs/SrM0YK7/NAu+r4LMh/9dq2A7k+rHs+w==}
@@ -1211,6 +1235,12 @@ snapshots:
     dependencies:
       undici-types: 7.24.6
 
+  '@types/whatwg-mimetype@3.0.2': {}
+
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 25.9.1
+
   '@typescript/native-preview-darwin-arm64@7.0.0-dev.20260509.2':
     optional: true
 
@@ -1273,7 +1303,7 @@ snapshots:
   '@voidzero-dev/vite-plus-linux-x64-musl@0.1.22':
     optional: true
 
-  '@voidzero-dev/vite-plus-test@0.1.22(@types/node@25.9.1)(@voidzero-dev/vite-plus-core@0.1.22(@types/node@25.9.1)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0)':
+  '@voidzero-dev/vite-plus-test@0.1.22(@types/node@25.9.1)(@voidzero-dev/vite-plus-core@0.1.22(@types/node@25.9.1)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0))(happy-dom@20.9.0)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0)':
     dependencies:
       '@standard-schema/spec': 1.1.0
       '@types/chai': 5.2.3
@@ -1291,6 +1321,7 @@ snapshots:
       ws: 8.20.1
     optionalDependencies:
       '@types/node': 25.9.1
+      happy-dom: 20.9.0
     transitivePeerDependencies:
       - '@arethetypeswrong/core'
       - '@tsdown/css'
@@ -1313,7 +1344,7 @@ snapshots:
       - utf-8-validate
       - yaml
 
-  '@voidzero-dev/vite-plus-test@0.1.22(@types/node@25.9.1)(jiti@2.7.0)(typescript@6.0.3)(vite@8.0.14(@types/node@25.9.1)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)':
+  '@voidzero-dev/vite-plus-test@0.1.22(@types/node@25.9.1)(happy-dom@20.9.0)(jiti@2.7.0)(typescript@6.0.3)(vite@8.0.14(@types/node@25.9.1)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)':
     dependencies:
       '@standard-schema/spec': 1.1.0
       '@types/chai': 5.2.3
@@ -1331,6 +1362,7 @@ snapshots:
       ws: 8.20.1
     optionalDependencies:
       '@types/node': 25.9.1
+      happy-dom: 20.9.0
     transitivePeerDependencies:
       - '@arethetypeswrong/core'
       - '@tsdown/css'
@@ -1381,6 +1413,8 @@ snapshots:
 
   detect-libc@2.1.2: {}
 
+  entities@7.0.1: {}
+
   es-module-lexer@1.7.0: {}
 
   fdir@6.5.0(picomatch@4.0.4):
@@ -1389,6 +1423,18 @@ snapshots:
 
   fsevents@2.3.3:
     optional: true
+
+  happy-dom@20.9.0:
+    dependencies:
+      '@types/node': 25.9.1
+      '@types/whatwg-mimetype': 3.0.2
+      '@types/ws': 8.18.1
+      entities: 7.0.1
+      whatwg-mimetype: 3.0.0
+      ws: 8.20.1
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   jiti@2.7.0: {}
 
@@ -1591,12 +1637,12 @@ snapshots:
 
   undici-types@7.24.6: {}
 
-  vite-plus@0.1.22(@types/node@25.9.1)(@voidzero-dev/vite-plus-core@0.1.22(@types/node@25.9.1)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0):
+  vite-plus@0.1.22(@types/node@25.9.1)(@voidzero-dev/vite-plus-core@0.1.22(@types/node@25.9.1)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0))(happy-dom@20.9.0)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0):
     dependencies:
       '@oxc-project/types': 0.129.0
       '@oxlint/plugins': 1.61.0
       '@voidzero-dev/vite-plus-core': 0.1.22(@types/node@25.9.1)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0)
-      '@voidzero-dev/vite-plus-test': 0.1.22(@types/node@25.9.1)(@voidzero-dev/vite-plus-core@0.1.22(@types/node@25.9.1)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0))(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0)
+      '@voidzero-dev/vite-plus-test': 0.1.22(@types/node@25.9.1)(@voidzero-dev/vite-plus-core@0.1.22(@types/node@25.9.1)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0))(happy-dom@20.9.0)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0)
       oxfmt: 0.48.0
       oxlint: 1.63.0(oxlint-tsgolint@0.22.1)
       oxlint-tsgolint: 0.22.1
@@ -1640,12 +1686,12 @@ snapshots:
       - vite
       - yaml
 
-  vite-plus@0.1.22(@types/node@25.9.1)(jiti@2.7.0)(typescript@6.0.3)(vite@8.0.14(@types/node@25.9.1)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0):
+  vite-plus@0.1.22(@types/node@25.9.1)(happy-dom@20.9.0)(jiti@2.7.0)(typescript@6.0.3)(vite@8.0.14(@types/node@25.9.1)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0):
     dependencies:
       '@oxc-project/types': 0.129.0
       '@oxlint/plugins': 1.61.0
       '@voidzero-dev/vite-plus-core': 0.1.22(@types/node@25.9.1)(jiti@2.7.0)(typescript@6.0.3)(yaml@2.9.0)
-      '@voidzero-dev/vite-plus-test': 0.1.22(@types/node@25.9.1)(jiti@2.7.0)(typescript@6.0.3)(vite@8.0.14(@types/node@25.9.1)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)
+      '@voidzero-dev/vite-plus-test': 0.1.22(@types/node@25.9.1)(happy-dom@20.9.0)(jiti@2.7.0)(typescript@6.0.3)(vite@8.0.14(@types/node@25.9.1)(jiti@2.7.0)(yaml@2.9.0))(yaml@2.9.0)
       oxfmt: 0.48.0
       oxlint: 1.63.0(oxlint-tsgolint@0.22.1)
       oxlint-tsgolint: 0.22.1
@@ -1701,6 +1747,8 @@ snapshots:
       fsevents: 2.3.3
       jiti: 2.7.0
       yaml: 2.9.0
+
+  whatwg-mimetype@3.0.0: {}
 
   ws@8.20.1: {}
 
