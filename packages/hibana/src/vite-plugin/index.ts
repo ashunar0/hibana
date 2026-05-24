@@ -6,7 +6,7 @@ export function shouldTransform(id: string, code: string): boolean {
   if (!id.endsWith(".tsx")) return false;
   // node_modules 配下や `?...` query 付きは skip
   if (id.includes("node_modules")) return false;
-  return /(?<![.\w])component\s+[A-Z]\w*\s*\(/.test(code) || /(?<![.\w])render\s*\{/.test(code);
+  return /(?<![.\w])component\s+[A-Z]\w*\s*\(/.test(code);
 }
 
 export function hibana(): Plugin {

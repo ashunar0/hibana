@@ -53,6 +53,28 @@ test("helper function 内の JSX は thunk 化されない (component scope 限�
   expect(out).not.toContain("() => count.value");
 });
 
+// T16-MVP: @{ } 局所 do-block
+
+test("@{ ternary } を含む component が compile できて JSX expression container に展開", () => {
+  const src = `component Show() {
+  const count = new Signal(0);
+  <div>@{ count.value > 0 ? <p/> : <span/> }</div>;
+}`;
+  const out = compile(src);
+  expect(out).toContain("function Show()");
+  expect(out).toContain("return <div>");
+  // @{ } は { (() => ...) } という JSX expression container 込みの arrow thunk に展開される
+  expect(out).toContain("{() => count.value > 0 ? <p /> : <span />}");
+});
+
+test("@{ } の arrow thunk は plugin の thunkify で二重 wrap されない", () => {
+  const src = `component C() {
+  <div>@{ flag.value ? <a/> : <b/> }</div>;
+}`;
+  const out = compile(src);
+  expect(out).not.toMatch(/\(\)\s*=>\s*\(\)\s*=>/);
+});
+
 test("末尾が return 文の component はそのまま (二重 return 化しない)", () => {
   // 既に明示 return がある場合は何もしない (do-block fallback)
   const src = `component Foo() {

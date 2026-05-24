@@ -1,5 +1,5 @@
 import { Signal, onCleanup } from "hibana";
-import { AutoCounterP3, CounterP3 } from "./pattern3-demo.tsx";
+import { AutoCounterP3, CounterP3, ShowCaseP3 } from "./pattern3-demo.tsx";
 
 // ===== 素 JSX 版 (TS automatic runtime, compiler 不要) =====
 
@@ -52,5 +52,7 @@ if (app) {
     (<p>component / render / signal-binding を全部 compile</p>) as Node,
     CounterP3() as Node,
     AutoCounterP3() as Node,
+    (<p>{"@{ }"} 局所 do-block (T16-MVP):</p>) as Node,
+    ShowCaseP3() as Node,
   );
 }

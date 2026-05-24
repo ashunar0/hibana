@@ -21,4 +21,13 @@ component AutoCounterP3() {
   <p>P3 Auto-tick: {count.value}</p>;
 }
 
-export { CounterP3, AutoCounterP3 };
+// T16-MVP: @{ } 局所 do-block。 単一 expression (ternary) で DOM 切替
+component ShowCaseP3() {
+  const count = new Signal(0);
+  <div>
+    <button onClick={() => count.value++}>p3-show: {count.value}</button>
+    @{ count.value === 0 ? <span>zero</span> : count.value % 2 === 0 ? <strong>even</strong> : <em>odd</em> }
+  </div>;
+}
+
+export { CounterP3, AutoCounterP3, ShowCaseP3 };
