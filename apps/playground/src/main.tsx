@@ -1,8 +1,7 @@
 import { Signal, onCleanup } from "hibana";
+import { AutoCounterP3, CounterP3 } from "./pattern3-demo.tsx";
 
-// TS automatic JSX runtime + jsxImportSource: "hibana" 経由で動く。
-// 自作 compiler 一切なし、 .tsx を TS が <button> → jsx("button", {...}) に変換するだけで
-// signal-native UI が動く。 これが「core (signal + jsx) だけ使うルート」 の検証。
+// ===== 素 JSX 版 (TS automatic runtime, compiler 不要) =====
 
 function Counter() {
   const count = new Signal(0);
@@ -17,12 +16,20 @@ function AutoCounter() {
   return <p>Auto-tick: {() => count.value}</p>;
 }
 
+// ===== mount =====
+
 const app = document.querySelector("#app");
 if (app) {
   app.append(
     (<h1>Hibana playground</h1>) as Node,
-    (<p>素 JSX + jsxImportSource: "hibana" (compiler 抜き)</p>) as Node,
+    (<h2>素 JSX 経路 (compiler 抜き)</h2>) as Node,
+    (<p>TS automatic runtime + jsxImportSource: "hibana"</p>) as Node,
     Counter() as Node,
     AutoCounter() as Node,
+    (<hr />) as Node,
+    (<h2>Pattern 3 syntax 経路 (Vite plugin 経由)</h2>) as Node,
+    (<p>component / render / signal-binding を全部 compile</p>) as Node,
+    CounterP3() as Node,
+    AutoCounterP3() as Node,
   );
 }

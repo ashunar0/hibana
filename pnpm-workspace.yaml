@@ -12,6 +12,14 @@ catalog:
   vitest: npm:@voidzero-dev/vite-plus-test@latest
   vite-plus: latest
   happy-dom: ^20.9.0
+  "@babel/parser": ^7.29.3
+  "@babel/traverse": ^7.29.0
+  "@babel/generator": ^7.29.1
+  "@babel/types": ^7.29.0
+  "@babel/plugin-syntax-jsx": ^7.28.6
+  "@types/babel__traverse": ^7.28.0
+  "@types/babel__generator": ^7.27.0
+  "@types/babel__core": ^7.20.5
 overrides:
   vite: "catalog:"
   vitest: "catalog:"
