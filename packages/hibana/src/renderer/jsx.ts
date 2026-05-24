@@ -8,51 +8,57 @@ export type Child =
   | null
   | undefined
   | readonly Child[]
-  | (() => unknown); // signal binding (text 位置)
+  | (() => unknown);
 
-export type Props = Record<string, unknown> | null;
+export type Props = (Record<string, unknown> & { children?: Child }) | null | undefined;
 
 export type Component = (props: Record<string, unknown>) => Node;
 
-export function jsx(type: string | Component, props: Props, ...children: Child[]): Node {
+/**
+ * JSX runtime (React automatic runtime spec)。
+ * - `type`: 文字列なら DOM 要素、関数なら component / Fragment
+ * - `props`: children は props.children 内
+ * - `_key`: list rendering の key、 MVP では無視
+ */
+export function jsx(type: string | Component, props: Props, _key?: unknown): Node {
   if (typeof type === "function") {
-    return type({ ...props, children });
+    return type(props ?? {});
   }
 
   const el = document.createElement(type);
 
   if (props) {
     for (const [key, value] of Object.entries(props)) {
+      if (key === "children") continue;
       applyProp(el, key, value);
     }
+    appendChild(el, props.children as Child);
   }
 
-  appendChildren(el, children);
   return el;
 }
 
-export function Fragment(props: { children: Child[] }): Node {
+// jsxs: children が静的 array の場合に呼ばれる variant。 MVP では jsx と同じ実装
+export const jsxs = jsx;
+
+export function Fragment(props: { children?: Child } | undefined): Node {
   const frag = document.createDocumentFragment();
-  appendChildren(frag, props.children);
+  if (props) appendChild(frag, props.children as Child);
   return frag;
 }
 
 function applyProp(el: Element, key: string, value: unknown): void {
-  if (key === "children") return;
-
-  // onClick → "click" 等。event handler は signal binding 対象外 (1 回 attach)
   if (key.startsWith("on") && typeof value === "function") {
     el.addEventListener(key.slice(2).toLowerCase(), value as EventListener);
     return;
   }
 
-  // ref callback (§8: Solid 流)
   if (key === "ref" && typeof value === "function") {
     (value as (el: Element) => void)(el);
     return;
   }
 
-  // 上記以外の function は signal getter として扱う → effect で wrap
+  // signal binding: function value は effect で wrap
   if (typeof value === "function") {
     effect(() => setAttr(el, key, (value as () => unknown)()));
     return;
@@ -87,15 +93,11 @@ function setAttr(el: Element, key: string, value: unknown): void {
   el.setAttribute(key, String(value));
 }
 
-function appendChildren(parent: Node, children: readonly Child[]): void {
-  for (const child of children) appendChild(parent, child);
-}
-
 function appendChild(parent: Node, child: Child): void {
   if (child == null || typeof child === "boolean") return;
 
   if (Array.isArray(child)) {
-    appendChildren(parent, child);
+    for (const c of child) appendChild(parent, c);
     return;
   }
 
@@ -105,7 +107,6 @@ function appendChild(parent: Node, child: Child): void {
   }
 
   // signal binding: function child は text node を 1 個作って effect で更新
-  // Node を返す reactive child (Show 相当) は Phase 2 で対応
   if (typeof child === "function") {
     const textNode = document.createTextNode("");
     parent.appendChild(textNode);
