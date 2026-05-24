@@ -19,12 +19,17 @@ import { HIB_COMPONENT_MARKER } from "./transform-component.ts";
  *   }
  *
  * 変換ルール:
- *   1. `@hib-component` marker を持つ FunctionDeclaration の body 末尾
- *      ExpressionStatement を ReturnStatement に昇格 (do-block 化)。
+ *   1. `@hib-component` marker を持つ FunctionDeclaration の body 末尾を
+ *      `autoReturn()` で do-block 化:
+ *        - ExpressionStatement → ReturnStatement
+ *        - BlockStatement → 内部末尾を再帰的に autoReturn
+ *        - IfStatement → consequent / alternate を再帰的に autoReturn (T16-c)
  *      `component Foo() { ... }` 全体が do-block として振る舞う。
- *   2. component scope 内の JSX child expression を thunk 化:
+ *   2. `@hib-do` marker を持つ ArrowFunctionExpression (= `@{ ... }` 由来) の
+ *      body 末尾も同じ `autoReturn()` で処理 (T16-b / T16-c)。
+ *   3. component scope / do-block scope 内の JSX child expression を thunk 化:
  *      `{count.value}` → `{() => count.value}` (signal binding)
- *   3. component scope 内の JSX attribute expression も thunk 化、 ただし以下は例外:
+ *   4. JSX attribute expression も thunk 化、 ただし以下は例外:
  *      - `on*` event handler (`onClick={...}`) → そのまま (1 回 attach)
  *      - `ref={...}` → そのまま (callback ref)
  *      - 既に function literal (`{() => x}`) → そのまま (二重 thunk 化を避ける)
@@ -37,46 +42,58 @@ export default function pattern3Plugin(): PluginObj {
       FunctionDeclaration(path) {
         if (!hasMarker(path.node, HIB_COMPONENT_MARKER)) return;
 
-        const body = path.node.body.body;
-        if (body.length === 0) return;
-
-        const last = body[body.length - 1];
-        // 最後が ExpressionStatement なら return に昇格、 そうでない (return 等が既にある)
-        // ならそのまま (do-block semantics: 最後の式が暗黙 return)
-        if (t.isExpressionStatement(last)) {
-          if (t.isJSXElement(last.expression) || t.isJSXFragment(last.expression)) {
-            thunkifyJsx(last.expression);
-          }
-          body[body.length - 1] = t.returnStatement(last.expression);
-        }
-
+        promoteLast(path.node.body.body);
         stripMarker(path.node, HIB_COMPONENT_MARKER);
       },
 
-      // T16-b: `@{ ... }` 由来の block-body arrow function の末尾 ExpressionStatement
-      // を ReturnStatement に昇格 (do-block semantics)。 marker comment `@hib-do` で
-      // transformAtBlock が生成した関数だけを対象にする (ただの arrow function は触らない)。
+      // `@{ ... }` 由来の block-body arrow function の末尾を do-block 化。
+      // marker comment `@hib-do` で transformAtBlock が生成した関数だけを対象にする
+      // (ただの arrow function は触らない)。
       ArrowFunctionExpression(path) {
         if (!hasMarker(path.node, HIB_DO_MARKER)) return;
 
         const body = path.node.body;
-        if (!t.isBlockStatement(body)) return;
-
-        const stmts = body.body;
-        if (stmts.length === 0) return;
-
-        const last = stmts[stmts.length - 1];
-        if (t.isExpressionStatement(last)) {
-          if (t.isJSXElement(last.expression) || t.isJSXFragment(last.expression)) {
-            thunkifyJsx(last.expression);
-          }
-          stmts[stmts.length - 1] = t.returnStatement(last.expression);
+        if (t.isBlockStatement(body)) {
+          promoteLast(body.body);
         }
-
         stripMarker(path.node, HIB_DO_MARKER);
       },
     },
   };
+}
+
+/** statement 列の最後を autoReturn で do-block 化 (in-place)。 */
+function promoteLast(stmts: t.Statement[]): void {
+  if (stmts.length === 0) return;
+  stmts[stmts.length - 1] = autoReturn(stmts[stmts.length - 1]);
+}
+
+/**
+ * do-block の暗黙 return semantics を AST に適用する (再帰)。
+ *   - ExpressionStatement: ReturnStatement に昇格 (末尾が JSX なら thunkifyJsx も)
+ *   - BlockStatement: 内部末尾に再帰
+ *   - IfStatement: consequent / alternate それぞれに再帰 (T16-c: `if-else` を expression として扱う)
+ *   - その他 (ReturnStatement / VariableDeclaration / etc.): そのまま (暗黙 return しない)
+ */
+function autoReturn(stmt: t.Statement): t.Statement {
+  if (t.isExpressionStatement(stmt)) {
+    if (t.isJSXElement(stmt.expression) || t.isJSXFragment(stmt.expression)) {
+      thunkifyJsx(stmt.expression);
+    }
+    return t.returnStatement(stmt.expression);
+  }
+  if (t.isBlockStatement(stmt)) {
+    promoteLast(stmt.body);
+    return stmt;
+  }
+  if (t.isIfStatement(stmt)) {
+    stmt.consequent = autoReturn(stmt.consequent);
+    if (stmt.alternate) {
+      stmt.alternate = autoReturn(stmt.alternate);
+    }
+    return stmt;
+  }
+  return stmt;
 }
 
 type Markable = t.FunctionDeclaration | t.ArrowFunctionExpression;

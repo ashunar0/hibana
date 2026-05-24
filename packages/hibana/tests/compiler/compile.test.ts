@@ -69,6 +69,45 @@ test("@{ ternary } を含む component が compile できて auto-return され�
   expect(out).not.toContain("@hib-do");
 });
 
+// T16-c: @{ if-else } の block-as-expression
+
+test("@{ if-else } の各 branch 末尾が return に昇格される (block 形式)", () => {
+  const src = `component C() {
+  <div>@{ if (count.value > 0) { <p>positive</p> } else { <span>zero</span> } }</div>;
+}`;
+  const out = compile(src);
+  // if-else の各 branch 末尾の JSX が return に昇格
+  expect(out).toMatch(/if\s*\(count\.value\s*>\s*0\)\s*\{\s*return\s+<p>positive<\/p>/);
+  expect(out).toMatch(/else\s*\{\s*return\s+<span>zero<\/span>/);
+});
+
+test("@{ if-else } 行区切りの単 statement 形式も動く", () => {
+  // ASI 効くよう改行で区切る
+  const src = `component C() {
+  <div>@{
+    if (count.value > 0) <p>positive</p>
+    else <span>zero</span>
+  }</div>;
+}`;
+  const out = compile(src);
+  expect(out).toMatch(/if\s*\(count\.value\s*>\s*0\)\s*return\s+<p>positive<\/p>/);
+  expect(out).toMatch(/else\s+return\s+<span>zero<\/span>/);
+});
+
+test("@{ else-if 連鎖 } も再帰的に return 昇格される", () => {
+  const src = `component C() {
+  <div>@{
+    if (count.value === 0) { <span>zero</span> }
+    else if (count.value % 2 === 0) { <strong>even</strong> }
+    else { <em>odd</em> }
+  }</div>;
+}`;
+  const out = compile(src);
+  expect(out).toMatch(/return\s+<span>zero<\/span>/);
+  expect(out).toMatch(/return\s+<strong>even<\/strong>/);
+  expect(out).toMatch(/return\s+<em>odd<\/em>/);
+});
+
 test("@{ stmts; lastExpr } の statement 列が auto-return される (T16-b)", () => {
   const src = `component C() {
   <div>@{ const label = String(count.value); <p>{label}</p> }</div>;

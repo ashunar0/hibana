@@ -43,4 +43,17 @@ component DoBlockP3() {
   </div>;
 }
 
-export { CounterP3, AutoCounterP3, ShowCaseP3, DoBlockP3 };
+// T16-c: @{ if-else } の block-as-expression。 handoff.md の例そのままを動かせる
+component IfElseP3() {
+  const count = new Signal(0);
+  <div>
+    <button onClick={() => count.value++}>p3-if: {count.value}</button>
+    @{
+      if (count.value === 0) <span>zero</span>
+      else if (count.value % 2 === 0) <strong>even {count.value}</strong>
+      else <em>odd {count.value}</em>
+    }
+  </div>;
+}
+
+export { CounterP3, AutoCounterP3, ShowCaseP3, DoBlockP3, IfElseP3 };

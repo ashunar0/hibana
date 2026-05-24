@@ -1,5 +1,5 @@
 import { Signal, onCleanup } from "hibana";
-import { AutoCounterP3, CounterP3, DoBlockP3, ShowCaseP3 } from "./pattern3-demo.tsx";
+import { AutoCounterP3, CounterP3, DoBlockP3, IfElseP3, ShowCaseP3 } from "./pattern3-demo.tsx";
 
 // ===== 素 JSX 版 (TS automatic runtime, compiler 不要) =====
 
@@ -56,5 +56,7 @@ if (app) {
     ShowCaseP3() as Node,
     (<p>{"@{ stmts; lastExpr }"} statement 列 auto-return (T16-b):</p>) as Node,
     DoBlockP3() as Node,
+    (<p>{"@{ if-else }"} block-as-expression (T16-c):</p>) as Node,
+    IfElseP3() as Node,
   );
 }
