@@ -1,5 +1,6 @@
 import type { PluginObj } from "@babel/core";
 import * as t from "@babel/types";
+import { HIB_DO_MARKER } from "./transform-at-block.ts";
 import { HIB_COMPONENT_MARKER } from "./transform-component.ts";
 
 /**
@@ -34,7 +35,7 @@ export default function pattern3Plugin(): PluginObj {
     name: "hibana-pattern3",
     visitor: {
       FunctionDeclaration(path) {
-        if (!hasComponentMarker(path.node)) return;
+        if (!hasMarker(path.node, HIB_COMPONENT_MARKER)) return;
 
         const body = path.node.body.body;
         if (body.length === 0) return;
@@ -49,25 +50,50 @@ export default function pattern3Plugin(): PluginObj {
           body[body.length - 1] = t.returnStatement(last.expression);
         }
 
-        // marker comment は出力に残したくないので除去
-        stripComponentMarker(path.node);
+        stripMarker(path.node, HIB_COMPONENT_MARKER);
+      },
+
+      // T16-b: `@{ ... }` 由来の block-body arrow function の末尾 ExpressionStatement
+      // を ReturnStatement に昇格 (do-block semantics)。 marker comment `@hib-do` で
+      // transformAtBlock が生成した関数だけを対象にする (ただの arrow function は触らない)。
+      ArrowFunctionExpression(path) {
+        if (!hasMarker(path.node, HIB_DO_MARKER)) return;
+
+        const body = path.node.body;
+        if (!t.isBlockStatement(body)) return;
+
+        const stmts = body.body;
+        if (stmts.length === 0) return;
+
+        const last = stmts[stmts.length - 1];
+        if (t.isExpressionStatement(last)) {
+          if (t.isJSXElement(last.expression) || t.isJSXFragment(last.expression)) {
+            thunkifyJsx(last.expression);
+          }
+          stmts[stmts.length - 1] = t.returnStatement(last.expression);
+        }
+
+        stripMarker(path.node, HIB_DO_MARKER);
       },
     },
   };
 }
 
-function hasComponentMarker(node: t.FunctionDeclaration): boolean {
-  return node.leadingComments?.some((c) => c.value.includes(HIB_COMPONENT_MARKER)) ?? false;
+type Markable = t.FunctionDeclaration | t.ArrowFunctionExpression;
+
+function hasMarker(node: Markable, marker: string): boolean {
+  // leadingComments / innerComments の両方を確認 (ParenthesizedExpression 内の
+  // arrow function には innerComments として attach されることがある)
+  const all = [...(node.leadingComments ?? []), ...(node.innerComments ?? [])];
+  return all.some((c) => c.value.includes(marker));
 }
 
-function stripComponentMarker(node: t.FunctionDeclaration): void {
-  if (!node.leadingComments) return;
-  node.leadingComments = node.leadingComments.filter(
-    (c) => !c.value.includes(HIB_COMPONENT_MARKER),
-  );
-  if (node.leadingComments.length === 0) {
-    // Babel が空配列でも余計な空コメント枠を残すことがあるので null 化
-    node.leadingComments = null;
+function stripMarker(node: Markable, marker: string): void {
+  for (const key of ["leadingComments", "innerComments"] as const) {
+    const list = node[key];
+    if (!list) continue;
+    const filtered = list.filter((c) => !c.value.includes(marker));
+    node[key] = filtered.length === 0 ? null : filtered;
   }
 }
 

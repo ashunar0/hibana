@@ -30,4 +30,17 @@ component ShowCaseP3() {
   </div>;
 }
 
-export { CounterP3, AutoCounterP3, ShowCaseP3 };
+// T16-b: @{ } 内に statement 列を書き、 末尾の式が auto-return される
+component DoBlockP3() {
+  const count = new Signal(0);
+  <div>
+    <button onClick={() => count.value++}>p3-do: {count.value}</button>
+    @{
+      const label = count.value % 2 === 0 ? "偶数" : "奇数";
+      const cls = count.value > 5 ? "big" : "small";
+      <p className={cls}>label={label}, size={cls}</p>
+    }
+  </div>;
+}
+
+export { CounterP3, AutoCounterP3, ShowCaseP3, DoBlockP3 };

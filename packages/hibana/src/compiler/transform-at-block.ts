@@ -1,19 +1,31 @@
 // `@{ ... }` (JSX 内局所 do-block) は valid JS じゃないので Babel parser を通せない。
-// pre-process で `{(() => ...)}` (JSX expression container + arrow thunk) に展開する。
+// pre-process で `{(/*@hib-do*/() => { ... })}` (JSX expression container + marker 付き
+// block-body arrow function) に展開する。
 //
-// MVP (T16-a): `@{ expr }` 単一 expression のみ対応。
+// 中身は block body として括られ、 plugin.ts の ArrowFunctionExpression visitor が
+// `@hib-do` marker を見つけて末尾 ExpressionStatement を ReturnStatement に昇格する
+// (do-block semantics: 最後の式が暗黙 return)。 これにより:
+//   `@{ expr }` (単一) も `@{ stmts; lastExpr }` (statement 列) も同じ pipeline で動く
+//
+// 例:
 //   `<div>@{ count.value > 0 ? <A/> : <B/> }</div>` →
-//   `<div>{(() => count.value > 0 ? <A/> : <B/>)}</div>`
+//   `<div>{(/*@hib-do*/() => { count.value > 0 ? <A/> : <B/> })}</div>` →
+//   plugin 後 `<div>{(() => { return count.value > 0 ? <A/> : <B/>; })}</div>`
+//
+//   `<div>@{ const x = compute(); <p>{x}</p> }</div>` →
+//   `<div>{(/*@hib-do*/() => { const x = compute(); <p>{x}</p> })}</div>` →
+//   plugin 後 `<div>{(() => { const x = compute(); return <p>{x}</p>; })}</div>`
 //
 // 出力は JSX expression container 込みなので JSX 外で書くと parse error になる
 // (`const x = @{...}` のような書き方は仕様外、 MVP 制約)。
-// JSX runtime の reactive Node-child binding (T9.6) と組み合わせて条件分岐 DOM 切替を実現する。
-// 末尾 expression auto-return (statement 列対応) と if-else expression 化は T16-b / T16-c に持ち越し。
+// `if-else` を block-as-expression として扱う (T16-c) は持ち越し。
 //
 // 注意:
 // - 文字列リテラル / template / コメント内の `@{` は無視 (誤マッチ回避)
 // - `@` の直前が word char (`email@example` 等) なら無視
 // - brace matching は 文字列/コメント を skip しながら `{` `}` で深さ判定 (JSX 内 `{}` も正しく対応)
+
+export const HIB_DO_MARKER = "@hib-do";
 
 export function transformAtBlock(source: string): string {
   let result = "";
@@ -55,8 +67,9 @@ export function transformAtBlock(source: string): string {
       }
       const bodyEnd = findMatchingBrace(source, i + 2);
       const body = source.slice(i + 2, bodyEnd).trim();
-      // JSX expression container 込みで wrap (JSX 内に置かれることを前提とする)
-      result += `{(() => ${body})}`;
+      // JSX expression container 込み + marker 付き block-body arrow function。
+      // 末尾 ExpressionStatement → ReturnStatement の昇格は plugin.ts で行う。
+      result += `{(/*${HIB_DO_MARKER}*/() => { ${body} })}`;
       i = bodyEnd + 1;
       continue;
     }

@@ -55,7 +55,7 @@ test("helper function 内の JSX は thunk 化されない (component scope 限�
 
 // T16-MVP: @{ } 局所 do-block
 
-test("@{ ternary } を含む component が compile できて JSX expression container に展開", () => {
+test("@{ ternary } を含む component が compile できて auto-return される", () => {
   const src = `component Show() {
   const count = new Signal(0);
   <div>@{ count.value > 0 ? <p/> : <span/> }</div>;
@@ -63,8 +63,21 @@ test("@{ ternary } を含む component が compile できて JSX expression cont
   const out = compile(src);
   expect(out).toContain("function Show()");
   expect(out).toContain("return <div>");
-  // @{ } は { (() => ...) } という JSX expression container 込みの arrow thunk に展開される
-  expect(out).toContain("{() => count.value > 0 ? <p /> : <span />}");
+  // @{ } は block body arrow thunk に展開され、 末尾 expr が return に昇格される
+  expect(out).toMatch(/\(\)\s*=>\s*\{\s*return\s+count\.value\s*>\s*0\s*\?/);
+  // marker comment は出力に残らない
+  expect(out).not.toContain("@hib-do");
+});
+
+test("@{ stmts; lastExpr } の statement 列が auto-return される (T16-b)", () => {
+  const src = `component C() {
+  <div>@{ const label = String(count.value); <p>{label}</p> }</div>;
+}`;
+  const out = compile(src);
+  expect(out).toContain("function C()");
+  expect(out).toContain("const label = String(count.value);");
+  // 末尾の <p>{label}</p> が return に昇格
+  expect(out).toMatch(/return\s+<p>\{label\}<\/p>/);
 });
 
 test("@{ } の arrow thunk は plugin の thunkify で二重 wrap されない", () => {
