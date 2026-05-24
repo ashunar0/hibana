@@ -106,18 +106,39 @@ function appendChild(parent: Node, child: Child): void {
     return;
   }
 
-  // signal binding: function child は text node を 1 個作って effect で更新
+  // signal binding: function child は effect 内で 1 slot を更新
+  // - return が Node → replaceChild で差し替え (Show 相当の DOM 切替)
+  // - return が primitive → text node を 1 個維持して data 更新 (DOM churn 回避)
+  // - primitive ⇄ Node 切替時は replaceChild で 1:1 置換 (childNodes.length は不変)
   if (typeof child === "function") {
-    const textNode = document.createTextNode("");
-    parent.appendChild(textNode);
+    let current: Node | null = null;
     effect(() => {
       const v = (child as () => unknown)();
-      textNode.data = stringifyChild(v);
+
+      // 最適化: current が Text かつ value が primitive → data 更新だけ
+      if (current?.nodeType === 3 /* TEXT_NODE */ && !(v instanceof Node)) {
+        (current as Text).data = stringifyChild(v);
+        return;
+      }
+
+      const next = toNode(v);
+      if (current?.parentNode === parent) {
+        parent.replaceChild(next, current);
+      } else {
+        parent.appendChild(next);
+      }
+      current = next;
     });
     return;
   }
 
   parent.appendChild(document.createTextNode(stringifyChild(child)));
+}
+
+function toNode(value: unknown): Node {
+  if (value == null || typeof value === "boolean") return document.createTextNode("");
+  if (value instanceof Node) return value;
+  return document.createTextNode(stringifyChild(value));
 }
 
 function stringifyChild(value: unknown): string {

@@ -136,6 +136,92 @@ test("§8 Counter example end-to-end", () => {
   expect(button.textContent).toBe("Count: 3");
 });
 
+// T9.6: reactive Node-child (Show 相当の DOM 切替)
+
+test("function child returning Node mounts the Node directly", () => {
+  const showA = new Signal(true);
+  const a = document.createElement("p");
+  a.textContent = "A";
+  const b = document.createElement("span");
+  b.textContent = "B";
+  const el = jsx("div", { children: () => (showA.value ? a : b) }) as HTMLElement;
+
+  expect(el.contains(a)).toBe(true);
+  expect(el.contains(b)).toBe(false);
+});
+
+test("function child swaps Node when signal flips (Node → Node)", () => {
+  const showA = new Signal(true);
+  const a = document.createElement("p");
+  const b = document.createElement("span");
+  const el = jsx("div", { children: () => (showA.value ? a : b) }) as HTMLElement;
+
+  showA.value = false;
+  flushSync();
+  expect(el.contains(a)).toBe(false);
+  expect(el.contains(b)).toBe(true);
+  expect(el.childNodes.length).toBe(1);
+});
+
+test("function child swaps from Node to primitive", () => {
+  const showNode = new Signal(true);
+  const node = document.createElement("p");
+  node.textContent = "node";
+  const el = jsx("div", { children: () => (showNode.value ? node : "text") }) as HTMLElement;
+  expect(el.contains(node)).toBe(true);
+
+  showNode.value = false;
+  flushSync();
+  expect(el.contains(node)).toBe(false);
+  expect(el.textContent).toBe("text");
+  expect(el.childNodes.length).toBe(1);
+});
+
+test("function child swaps from primitive to Node", () => {
+  const showNode = new Signal(false);
+  const node = document.createElement("p");
+  node.textContent = "node";
+  const el = jsx("div", { children: () => (showNode.value ? node : "text") }) as HTMLElement;
+  expect(el.textContent).toBe("text");
+
+  showNode.value = true;
+  flushSync();
+  expect(el.contains(node)).toBe(true);
+  expect(el.childNodes.length).toBe(1);
+});
+
+test("function child returning null then a Node", () => {
+  const value = new Signal<HTMLElement | null>(null);
+  const el = jsx("div", { children: () => value.value }) as HTMLElement;
+  expect(el.textContent).toBe("");
+  expect(el.childNodes.length).toBe(1); // 空 text node が 1 個
+
+  const p = document.createElement("p");
+  p.textContent = "hi";
+  value.value = p;
+  flushSync();
+  expect(el.contains(p)).toBe(true);
+  expect(el.childNodes.length).toBe(1);
+});
+
+test("static siblings around a reactive Node-child do not move", () => {
+  const showA = new Signal(true);
+  const a = document.createElement("p");
+  a.textContent = "A";
+  const b = document.createElement("span");
+  b.textContent = "B";
+  const el = jsxs("div", {
+    children: ["before ", () => (showA.value ? a : b), " after"],
+  }) as HTMLElement;
+
+  expect(el.childNodes.length).toBe(3);
+  showA.value = false;
+  flushSync();
+  expect(el.childNodes.length).toBe(3);
+  expect(el.firstChild?.textContent).toBe("before ");
+  expect(el.lastChild?.textContent).toBe(" after");
+});
+
 test("reactive binding tracks only signals read in the getter", () => {
   const shown = new Signal(true);
   const value = new Signal(10);
