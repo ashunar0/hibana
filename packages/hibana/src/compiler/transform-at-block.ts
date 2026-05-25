@@ -1,19 +1,19 @@
 // `@{ ... }` (JSX 内局所 do-block) は valid JS じゃないので Babel parser を通せない。
-// pre-process で `{(/*@hib-do*/() => { ... })}` (JSX expression container + marker 付き
+// pre-process で `{(/*@hbn-do*/() => { ... })}` (JSX expression container + marker 付き
 // block-body arrow function) に展開する。
 //
 // 中身は block body として括られ、 plugin.ts の ArrowFunctionExpression visitor が
-// `@hib-do` marker を見つけて末尾 ExpressionStatement を ReturnStatement に昇格する
+// `@hbn-do` marker を見つけて末尾 ExpressionStatement を ReturnStatement に昇格する
 // (do-block semantics: 最後の式が暗黙 return)。 これにより:
 //   `@{ expr }` (単一) も `@{ stmts; lastExpr }` (statement 列) も同じ pipeline で動く
 //
 // 例:
 //   `<div>@{ count.value > 0 ? <A/> : <B/> }</div>` →
-//   `<div>{(/*@hib-do*/() => { count.value > 0 ? <A/> : <B/> })}</div>` →
+//   `<div>{(/*@hbn-do*/() => { count.value > 0 ? <A/> : <B/> })}</div>` →
 //   plugin 後 `<div>{(() => { return count.value > 0 ? <A/> : <B/>; })}</div>`
 //
 //   `<div>@{ const x = compute(); <p>{x}</p> }</div>` →
-//   `<div>{(/*@hib-do*/() => { const x = compute(); <p>{x}</p> })}</div>` →
+//   `<div>{(/*@hbn-do*/() => { const x = compute(); <p>{x}</p> })}</div>` →
 //   plugin 後 `<div>{(() => { const x = compute(); return <p>{x}</p>; })}</div>`
 //
 // 出力は JSX expression container 込みなので JSX 外で書くと parse error になる
@@ -25,7 +25,7 @@
 // - `@` の直前が word char (`email@example` 等) なら無視
 // - brace matching は 文字列/コメント を skip しながら `{` `}` で深さ判定 (JSX 内 `{}` も正しく対応)
 
-export const HIB_DO_MARKER = "@hib-do";
+export const HBN_DO_MARKER = "@hbn-do";
 
 export function transformAtBlock(source: string): string {
   let result = "";
@@ -69,7 +69,7 @@ export function transformAtBlock(source: string): string {
       const body = source.slice(i + 2, bodyEnd).trim();
       // JSX expression container 込み + marker 付き block-body arrow function。
       // 末尾 ExpressionStatement → ReturnStatement の昇格は plugin.ts で行う。
-      result += `{(/*${HIB_DO_MARKER}*/() => { ${body} })}`;
+      result += `{(/*${HBN_DO_MARKER}*/() => { ${body} })}`;
       i = bodyEnd + 1;
       continue;
     }

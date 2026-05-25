@@ -20,7 +20,7 @@ const traverse = ((_traverse as any).default ?? _traverse) as typeof _traverse;
  *
  * パイプライン:
  *   1. transform-component (string): `component Foo(` →
- *      `/* @hib-component *\/ function Foo(`
+ *      `/* @hbn-component *\/ function Foo(`
  *   2. transform-at-block (string): `@{ expr }` → `(() => expr)` (T16-MVP, 単一 expression)
  *   3. Babel parse + pattern3Plugin: marker 付き function の body 末尾を
  *      ReturnStatement に昇格 (do-block 化) + JSX 内 expression を thunk 化

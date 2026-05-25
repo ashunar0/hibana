@@ -1,10 +1,10 @@
 import { expect, test } from "vite-plus/test";
 import {
-  HIB_COMPONENT_MARKER,
+  HBN_COMPONENT_MARKER,
   transformComponent,
 } from "../../src/compiler/transform-component.ts";
 
-const MARK = `/* ${HIB_COMPONENT_MARKER} */`;
+const MARK = `/* ${HBN_COMPONENT_MARKER} */`;
 
 test("basic component → marker + function (no params)", () => {
   const out = transformComponent("component Counter() {}");

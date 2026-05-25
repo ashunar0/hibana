@@ -1,7 +1,7 @@
 import { expect, test } from "vite-plus/test";
-import { HIB_DO_MARKER, transformAtBlock } from "../../src/compiler/transform-at-block.ts";
+import { HBN_DO_MARKER, transformAtBlock } from "../../src/compiler/transform-at-block.ts";
 
-const M = `/*${HIB_DO_MARKER}*/`;
+const M = `/*${HBN_DO_MARKER}*/`;
 
 test("basic: @{ ternary } → marker 付き block body arrow thunk", () => {
   const out = transformAtBlock("@{ flag.value ? <A/> : <B/> }");

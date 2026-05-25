@@ -1,13 +1,13 @@
 import type { PluginObj } from "@babel/core";
 import * as t from "@babel/types";
-import { HIB_DO_MARKER } from "./transform-at-block.ts";
-import { HIB_COMPONENT_MARKER } from "./transform-component.ts";
+import { HBN_DO_MARKER } from "./transform-at-block.ts";
+import { HBN_COMPONENT_MARKER } from "./transform-component.ts";
 
 /**
  * Babel plugin: pre-processed Pattern 3 syntax を JS に降ろす。
  *
  * 入力 (transform-component 後):
- *   /* @hib-component *\/ function Counter() {
+ *   /* @hbn-component *\/ function Counter() {
  *     const count = new Signal(0)
  *     <button>Count: {count.value}</button>
  *   }
@@ -19,13 +19,13 @@ import { HIB_COMPONENT_MARKER } from "./transform-component.ts";
  *   }
  *
  * 変換ルール:
- *   1. `@hib-component` marker を持つ FunctionDeclaration の body 末尾を
+ *   1. `@hbn-component` marker を持つ FunctionDeclaration の body 末尾を
  *      `autoReturn()` で do-block 化:
  *        - ExpressionStatement → ReturnStatement
  *        - BlockStatement → 内部末尾を再帰的に autoReturn
  *        - IfStatement → consequent / alternate を再帰的に autoReturn (T16-c)
  *      `component Foo() { ... }` 全体が do-block として振る舞う。
- *   2. `@hib-do` marker を持つ ArrowFunctionExpression (= `@{ ... }` 由来) の
+ *   2. `@hbn-do` marker を持つ ArrowFunctionExpression (= `@{ ... }` 由来) の
  *      body 末尾も同じ `autoReturn()` で処理 (T16-b / T16-c)。
  *   3. component scope / do-block scope 内の JSX child expression を thunk 化:
  *      `{count.value}` → `{() => count.value}` (signal binding)
@@ -40,23 +40,23 @@ export default function pattern3Plugin(): PluginObj {
     name: "hibana-pattern3",
     visitor: {
       FunctionDeclaration(path) {
-        if (!hasMarker(path.node, HIB_COMPONENT_MARKER)) return;
+        if (!hasMarker(path.node, HBN_COMPONENT_MARKER)) return;
 
         promoteLast(path.node.body.body);
-        stripMarker(path.node, HIB_COMPONENT_MARKER);
+        stripMarker(path.node, HBN_COMPONENT_MARKER);
       },
 
       // `@{ ... }` 由来の block-body arrow function の末尾を do-block 化。
-      // marker comment `@hib-do` で transformAtBlock が生成した関数だけを対象にする
+      // marker comment `@hbn-do` で transformAtBlock が生成した関数だけを対象にする
       // (ただの arrow function は触らない)。
       ArrowFunctionExpression(path) {
-        if (!hasMarker(path.node, HIB_DO_MARKER)) return;
+        if (!hasMarker(path.node, HBN_DO_MARKER)) return;
 
         const body = path.node.body;
         if (t.isBlockStatement(body)) {
           promoteLast(body.body);
         }
-        stripMarker(path.node, HIB_DO_MARKER);
+        stripMarker(path.node, HBN_DO_MARKER);
       },
     },
   };
@@ -64,12 +64,12 @@ export default function pattern3Plugin(): PluginObj {
 
 // for-collect モード用の collector 変数名 (do-block 内の生成変数なので衝突しないよう
 // 固定 reserved name、 ユーザコードでこの名前を使うことは想定しない)。
-const COLLECT_VAR = "__h_out";
+const COLLECT_VAR = "__hbn_out";
 
 /** statement 列の最後を autoReturn で do-block 化 (in-place)。
  *  末尾が for / for-of / for-in の場合は「array collect モード」 に切替: body 内末尾の
- *  ExpressionStatement を `__h_out.push(...)` に書き換え、 stmts 全体を
- *  `const __h_out = []; ...; for(...){ ... push ... }; return __h_out;` に展開 (T23)。
+ *  ExpressionStatement を `__hbn_out.push(...)` に書き換え、 stmts 全体を
+ *  `const __hbn_out = []; ...; for(...){ ... push ... }; return __hbn_out;` に展開 (T23)。
  */
 function promoteLast(stmts: t.Statement[]): void {
   if (stmts.length === 0) return;
@@ -115,7 +115,7 @@ function isForLike(stmt: t.Statement): stmt is ForLike {
   return t.isForStatement(stmt) || t.isForOfStatement(stmt) || t.isForInStatement(stmt);
 }
 
-/** for-collect モード: `for (X) <Item/>` の body を `__h_out.push(<Item/>)` に書き換え、
+/** for-collect モード: `for (X) <Item/>` の body を `__hbn_out.push(<Item/>)` に書き換え、
  *  stmts に collector の宣言と return を前後注入する (T23 `@{ for (...) <Item/> }`)。
  */
 function promoteForCollect(stmts: t.Statement[]): void {
