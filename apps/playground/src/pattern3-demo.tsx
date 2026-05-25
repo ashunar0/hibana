@@ -5,7 +5,7 @@
 //
 // 新 syntax (T15.6, 2026-05-24): `render { }` は廃止し、 `component` 本体全体が
 // do-block として振る舞う。 body 末尾の JSX 式が自動 return される。
-import { Computed, Signal, Store, onCleanup, onMount, untrack } from "hibana";
+import { Computed, Resource, Signal, Store, onCleanup, onMount, untrack } from "hibana";
 
 component CounterP3() {
   const count = new Signal(0);
@@ -103,6 +103,26 @@ component UntrackP3() {
   </div>;
 }
 
+// T20: Resource async data + auto-refetch (id signal 変化で再 fetch)
+component ResourceP3() {
+  const id = new Signal(1);
+  const user = new Resource(
+    () => new Promise<string>((resolve) => {
+      const currentId = id.value;
+      setTimeout(() => resolve(`user-${currentId} (fetched at ${Date.now() % 100000})`), 600);
+    }),
+  );
+  <div>
+    <button onClick={() => (id.value = id.value === 1 ? 2 : 1)}>p3-resource toggle id (now {id.value})</button>
+    <button onClick={() => user.refetch()}>refetch</button>
+    @{
+      if (user.loading) <p>loading...</p>
+      else if (user.error) <p>error: {user.error.message}</p>
+      else <p>value: {user.value}</p>
+    }
+  </div>;
+}
+
 export {
   CounterP3,
   AutoCounterP3,
@@ -113,4 +133,5 @@ export {
   StoreP3,
   OnMountP3,
   UntrackP3,
+  ResourceP3,
 };

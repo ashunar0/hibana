@@ -6,6 +6,7 @@ import {
   DoBlockP3,
   IfElseP3,
   OnMountP3,
+  ResourceP3,
   ShowCaseP3,
   StoreP3,
   UntrackP3,
@@ -78,5 +79,7 @@ if (app) {
     OnMountP3() as Node,
     (<p>T21 untrack (ignored signal does not rerender the surrounding text):</p>) as Node,
     UntrackP3() as Node,
+    (<p>T20 Resource (async data, auto-refetch on dep signal change, manual refetch):</p>) as Node,
+    ResourceP3() as Node,
   );
 }
