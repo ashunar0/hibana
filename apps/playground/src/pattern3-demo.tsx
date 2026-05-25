@@ -5,7 +5,7 @@
 //
 // 新 syntax (T15.6, 2026-05-24): `render { }` は廃止し、 `component` 本体全体が
 // do-block として振る舞う。 body 末尾の JSX 式が自動 return される。
-import { Computed, Resource, Signal, Store, onCleanup, onMount, untrack } from "hibana";
+import { Computed, Mutation, Resource, Signal, Store, onCleanup, onMount, untrack } from "hibana";
 
 component CounterP3() {
   const count = new Signal(0);
@@ -123,6 +123,43 @@ component ResourceP3() {
   </div>;
 }
 
+// T20+: Mutation で楽観的更新 + rollback (50% で fake error → rollback)。
+// Resource (post) を like ボタンで即時 +1、 サーバ失敗時は前の値に戻す
+component OptimisticP3() {
+  const post = new Resource<{ id: number; likes: number }>(
+    () => Promise.resolve({ id: 1, likes: 10 }),
+  );
+
+  const like = new Mutation<void, { likes: number }>(
+    () =>
+      new Promise((resolve, reject) => {
+        setTimeout(() => {
+          if (Math.random() < 0.5) reject(new Error("server rejected"));
+          else resolve({ likes: (post.peek()?.likes ?? 0) });
+        }, 400);
+      }),
+    {
+      onMutate: () => {
+        const prev = post.peek();
+        if (prev) post.mutate({ ...prev, likes: prev.likes + 1 });
+        return prev; // rollback 用 snapshot
+      },
+      onError: (_err, _input, prev) => {
+        post.mutate(prev as { id: number; likes: number } | undefined);
+      },
+    },
+  );
+
+  <div>
+    <button onClick={() => { like.mutate().catch(() => {}); }}>♡ like (50% reject) likes={post.value?.likes ?? "..."}</button>
+    @{
+      if (like.loading) <p>mutating...</p>
+      else if (like.error) <p>last attempt failed: {like.error.message} (rolled back)</p>
+      else <p>last attempt: ok</p>
+    }
+  </div>;
+}
+
 export {
   CounterP3,
   AutoCounterP3,
@@ -134,4 +171,5 @@ export {
   OnMountP3,
   UntrackP3,
   ResourceP3,
+  OptimisticP3,
 };

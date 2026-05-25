@@ -46,6 +46,16 @@ export class Resource<T> {
     this.#trigger.value++;
   }
 
+  // cache を直接書き換える。 楽観的更新の核 (useQuery setQueryData 相当)。
+  // in-flight な fetch が後で resolve しても捨てる (#version++) のがポイント:
+  // mutate で書いた値が古い fetch resolve で上書きされる事故を防ぐ。
+  mutate(newValue: T | undefined): void {
+    this.#version++;
+    this.#valueSig.value = newValue;
+    this.#loadingSig.value = false;
+    this.#errorSig.value = null;
+  }
+
   #run(): void {
     const myVersion = ++this.#version;
     this.#loadingSig.value = true;

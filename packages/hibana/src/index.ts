@@ -1,5 +1,6 @@
 export { Computed } from "./reactivity/computed.ts";
 export { effect, onCleanup, onMount, untrack } from "./reactivity/effect.ts";
+export { Mutation } from "./reactivity/mutation.ts";
 export { Owner, getCurrentOwner, runWithOwner } from "./reactivity/owner.ts";
 export { Resource } from "./reactivity/resource.ts";
 export { flushSync } from "./reactivity/scheduler.ts";

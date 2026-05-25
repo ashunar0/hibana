@@ -6,6 +6,7 @@ import {
   DoBlockP3,
   IfElseP3,
   OnMountP3,
+  OptimisticP3,
   ResourceP3,
   ShowCaseP3,
   StoreP3,
@@ -81,5 +82,7 @@ if (app) {
     UntrackP3() as Node,
     (<p>T20 Resource (async data, auto-refetch on dep signal change, manual refetch):</p>) as Node,
     ResourceP3() as Node,
+    (<p>T20+ Mutation + optimistic update (50% fake error → rollback):</p>) as Node,
+    OptimisticP3() as Node,
   );
 }

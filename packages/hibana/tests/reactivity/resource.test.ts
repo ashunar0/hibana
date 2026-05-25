@@ -167,3 +167,47 @@ test("integration: effect reading .value reruns on resolution", async () => {
   flushSync();
   expect(seen).toEqual([undefined, 100]);
 });
+
+// ---- .mutate(newValue) ----
+
+test("mutate(newValue) replaces cache, resets loading/error", async () => {
+  const r = new Resource(() => Promise.resolve(1));
+  await nextMicrotasks(2);
+  expect(r.value).toBe(1);
+
+  r.mutate(99);
+  expect(r.value).toBe(99);
+  expect(r.loading).toBe(false);
+  expect(r.error).toBeNull();
+});
+
+test("mutate() discards in-flight fetch resolve (no overwrite)", async () => {
+  const pending = deferred<number>();
+  const r = new Resource(() => pending.promise);
+  expect(r.loading).toBe(true);
+
+  // 楽観的更新: cache を即書き換え
+  r.mutate(42);
+  expect(r.value).toBe(42);
+  expect(r.loading).toBe(false);
+
+  // 後から fetch が resolve しても値は上書きされない
+  pending.resolve(1);
+  await nextMicrotasks(2);
+  expect(r.value).toBe(42);
+});
+
+test("mutate(newValue) triggers reactive read", async () => {
+  const r = new Resource(() => Promise.resolve(10));
+  await nextMicrotasks(2);
+
+  const seen: (number | undefined)[] = [];
+  effect(() => {
+    seen.push(r.value);
+  });
+  expect(seen).toEqual([10]);
+
+  r.mutate(20);
+  flushSync();
+  expect(seen).toEqual([10, 20]);
+});
