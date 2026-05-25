@@ -60,3 +60,28 @@ export function effect(fn: () => void): void {
 export function onCleanup(fn: () => void): void {
   addCleanupToCurrentOwner(fn);
 }
+
+// untrack: scope 単位で tracking を抑制 (signal read の依存登録を全て無視)。
+// `.peek()` が 1 signal 単位、 untrack はスコープ単位の対称 API (設計書 §4.6)。
+export function untrack<T>(fn: () => T): T {
+  return runWithSubscriber(null, fn);
+}
+
+// onMount: mount 後に 1 回だけ実行、 client only (SSR では skip、 設計書 §5)。
+// 「mount 後」 は MVP では microtask 境界で代用 (component 構築 → microtask → DOM 反映後)。
+// owner が dispose 済みなら fn を呼ばない (unmount 直後の取りこぼし防止)。
+// fn 内の signal read は依存登録しない (再 run しないので tracking する意味がない)。
+export function onMount(fn: () => void): void {
+  if (typeof window === "undefined") return;
+  const owner = getCurrentOwner();
+  queueMicrotask(() => {
+    if (owner?.disposed) return;
+    runWithSubscriber(null, () => {
+      try {
+        fn();
+      } catch (e) {
+        console.error(e);
+      }
+    });
+  });
+}
