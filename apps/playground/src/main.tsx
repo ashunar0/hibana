@@ -3,6 +3,7 @@ import {
   AutoCounterP3,
   ComputedP3,
   CounterP3,
+  DarkModeP3,
   DoBlockP3,
   GlitchFreeP3,
   IfElseP3,
@@ -92,5 +93,9 @@ if (app) {
     (<h2>T22 統合 demo</h2>) as Node,
     (<p>TodoList: Store + Signal + Computed + reactive list rendering (T9.7)</p>) as Node,
     TodoListP3() as Node,
+    (<hr />) as Node,
+    (<h2>Dark mode dogfood</h2>) as Node,
+    (<p>Signal + onMount (load) + effect (DOM + localStorage)</p>) as Node,
+    DarkModeP3() as Node,
   );
 }

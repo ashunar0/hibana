@@ -5,6 +5,27 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hibana playground</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      :root[data-theme="light"] {
+        background: #fff;
+        color: #1a1a1a;
+      }
+      :root[data-theme="dark"] {
+        background: #1a1a1a;
+        color: #e8e8e8;
+      }
+      :root[data-theme="dark"] button {
+        background: #333;
+        color: #e8e8e8;
+        border: 1px solid #555;
+      }
+      :root[data-theme="dark"] hr {
+        border-color: #444;
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>

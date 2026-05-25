@@ -267,6 +267,29 @@ component TodoListP3() {
   </div>;
 }
 
+// Dark mode toggle: Signal + onMount (localStorage 読み込み) + effect (DOM + localStorage 書き込み)
+// 主軸方針「動的なら JS で書く」 の延長で、 side effect (document.documentElement.dataset / localStorage)
+// は effect 内に閉じて signal-native に書ける、 ことの dogfood
+component DarkModeP3() {
+  const theme = new Signal<"light" | "dark">("light");
+
+  onMount(() => {
+    const saved = localStorage.getItem("hibana-theme");
+    if (saved === "light" || saved === "dark") theme.value = saved;
+  });
+
+  effect(() => {
+    document.documentElement.dataset.theme = theme.value;
+    localStorage.setItem("hibana-theme", theme.value);
+  });
+
+  <div>
+    <button onClick={() => (theme.value = theme.value === "light" ? "dark" : "light")}>
+      p3-darkmode toggle (now: {theme.value})
+    </button>
+  </div>;
+}
+
 export {
   CounterP3,
   AutoCounterP3,
@@ -281,4 +304,5 @@ export {
   ResourceP3,
   OptimisticP3,
   TodoListP3,
+  DarkModeP3,
 };
