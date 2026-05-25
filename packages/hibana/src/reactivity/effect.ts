@@ -1,12 +1,22 @@
 import { Owner, addCleanupToCurrentOwner, getCurrentOwner, runWithOwner } from "./owner.ts";
 import { type Schedulable, schedule } from "./scheduler.ts";
-import { type Subject, type Subscriber, clearDependencies, runWithSubscriber } from "./tracking.ts";
+import {
+  CHECK,
+  CLEAN,
+  DIRTY,
+  type State,
+  type Subject,
+  type Subscriber,
+  clearDependencies,
+  runWithSubscriber,
+} from "./tracking.ts";
 
 class Effect implements Subscriber, Schedulable {
   dependencies = new Set<Subject>();
   innerOwner: Owner;
   disposed = false;
   #fn: () => void;
+  #state: State = DIRTY;
 
   constructor(fn: () => void) {
     this.#fn = fn;
@@ -20,6 +30,23 @@ class Effect implements Subscriber, Schedulable {
 
   run(): void {
     if (this.disposed) return;
+    if (this.#state === CLEAN) return;
+
+    if (this.#state === CHECK) {
+      // dep walk: 各 Computed dep を resolve、 値変化があれば自身が DIRTY 昇格する
+      for (const dep of this.dependencies) {
+        dep.update?.();
+        if ((this.#state as State) === DIRTY) break;
+      }
+      if ((this.#state as State) === CHECK) {
+        // 全 dep 同値 → run skip して CLEAN 復帰
+        this.#state = CLEAN;
+        return;
+      }
+    }
+
+    // state === DIRTY: 通常 run
+    this.#state = CLEAN;
 
     // 前回 run の onCleanup を flush + 旧 inner owner 破棄
     this.innerOwner.dispose();
@@ -39,8 +66,10 @@ class Effect implements Subscriber, Schedulable {
     });
   }
 
-  notify(): void {
+  notify(state: State): void {
     if (this.disposed) return;
+    if (this.#state >= state) return;
+    this.#state = state;
     schedule(this);
   }
 

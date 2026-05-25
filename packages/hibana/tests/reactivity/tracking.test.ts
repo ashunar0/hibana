@@ -1,5 +1,7 @@
 import { expect, test } from "vite-plus/test";
 import {
+  DIRTY,
+  type State,
   type Subject,
   type Subscriber,
   clearDependencies,
@@ -13,12 +15,14 @@ function makeSubject(): Subject {
   return { subscribers: new Set() };
 }
 
-function makeSubscriber(): Subscriber & { notifyCount: number } {
+function makeSubscriber(): Subscriber & { notifyCount: number; lastState: State | null } {
   return {
     dependencies: new Set(),
     notifyCount: 0,
-    notify() {
+    lastState: null,
+    notify(state) {
       this.notifyCount++;
+      this.lastState = state;
     },
   };
 }
@@ -66,9 +70,10 @@ test("notifySubscribers calls notify on all subscribers", () => {
   subject.subscribers.add(a);
   subject.subscribers.add(b);
 
-  notifySubscribers(subject);
+  notifySubscribers(subject, DIRTY);
   expect(a.notifyCount).toBe(1);
   expect(b.notifyCount).toBe(1);
+  expect(a.lastState).toBe(DIRTY);
 });
 
 test("notifySubscribers tolerates subscribers added during notify", () => {
@@ -82,7 +87,7 @@ test("notifySubscribers tolerates subscribers added during notify", () => {
   };
   subject.subscribers.add(first);
 
-  expect(() => notifySubscribers(subject)).not.toThrow();
+  expect(() => notifySubscribers(subject, DIRTY)).not.toThrow();
   expect(late.notifyCount).toBe(0);
 });
 

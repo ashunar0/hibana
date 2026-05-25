@@ -1,4 +1,4 @@
-import { type Subject, notifySubscribers, track } from "./tracking.ts";
+import { DIRTY, type Subject, notifySubscribers, track } from "./tracking.ts";
 
 // Store<T> は object/array の deep reactive primitive (Solid createStore / Vue reactive 相当)。
 // 設計判断:
@@ -68,11 +68,11 @@ function wrap<T extends object>(raw: T): T {
       if (Object.is(prev, next)) return true;
       const ok = Reflect.set(target, key, next, receiver);
       if (ok) {
-        notifySubscribers(getNode(target, key));
+        notifySubscribers(getNode(target, key), DIRTY);
         // array の index 書き込みは length を暗黙更新するので、 length も notify
         // (push 末尾の this.length = newLen は同値スキップで no-op になるため補完が必要)
         if (isArr && key !== "length" && (target as unknown[]).length !== prevLen) {
-          notifySubscribers(getNode(target, "length"));
+          notifySubscribers(getNode(target, "length"), DIRTY);
         }
       }
       return ok;
@@ -81,7 +81,7 @@ function wrap<T extends object>(raw: T): T {
     deleteProperty(target, key) {
       const had = Object.hasOwn(target, key);
       const ok = Reflect.deleteProperty(target, key);
-      if (ok && had) notifySubscribers(getNode(target, key));
+      if (ok && had) notifySubscribers(getNode(target, key), DIRTY);
       return ok;
     },
   });

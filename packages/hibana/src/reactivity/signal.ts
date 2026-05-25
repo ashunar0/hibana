@@ -1,4 +1,4 @@
-import { type Subject, type Subscriber, notifySubscribers, track } from "./tracking.ts";
+import { DIRTY, type Subject, type Subscriber, notifySubscribers, track } from "./tracking.ts";
 
 export class Signal<T> implements Subject {
   subscribers = new Set<Subscriber>();
@@ -16,7 +16,7 @@ export class Signal<T> implements Subject {
   set value(next: T) {
     if (Object.is(this.#value, next)) return;
     this.#value = next;
-    notifySubscribers(this);
+    notifySubscribers(this, DIRTY);
   }
 
   peek(): T {

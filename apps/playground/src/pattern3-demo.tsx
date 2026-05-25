@@ -5,7 +5,17 @@
 //
 // 新 syntax (T15.6, 2026-05-24): `render { }` は廃止し、 `component` 本体全体が
 // do-block として振る舞う。 body 末尾の JSX 式が自動 return される。
-import { Computed, Mutation, Resource, Signal, Store, onCleanup, onMount, untrack } from "hibana";
+import {
+  Computed,
+  Mutation,
+  Resource,
+  Signal,
+  Store,
+  effect,
+  onCleanup,
+  onMount,
+  untrack,
+} from "hibana";
 
 component CounterP3() {
   const count = new Signal(0);
@@ -64,6 +74,26 @@ component ComputedP3() {
   <div>
     <button onClick={() => count.value++}>p3-computed: count={count.value}</button>
     <p>doubled={doubled.value}, quadrupled={quadrupled.value}</p>
+  </div>;
+}
+
+// T18.5: glitch-free 強化 (3-state push-CHECK / pull-confirm) の dogfood。
+// count を 1→2→3→... と回しても isPositive は true で同値なので effect runs は増えない。
+// マイナス側に行ったとき isPositive が false に変わって初めて effect が再 run する。
+component GlitchFreeP3() {
+  const count = new Signal(1);
+  const isPositive = new Computed(() => count.value > 0);
+  const runs = new Signal(0);
+  effect(() => {
+    void isPositive.value;
+    untrack(() => runs.value++);
+  });
+  <div>
+    <button onClick={() => count.value++}>p3-glitch count++: {count.value}</button>
+    <button onClick={() => (count.value -= 10)}>count -= 10</button>
+    <p>
+      isPositive={String(isPositive.value)}, effect runs={runs.value}
+    </p>
   </div>;
 }
 
@@ -251,6 +281,7 @@ export {
   DoBlockP3,
   IfElseP3,
   ComputedP3,
+  GlitchFreeP3,
   StoreP3,
   OnMountP3,
   UntrackP3,
