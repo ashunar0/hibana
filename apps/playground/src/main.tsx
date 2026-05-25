@@ -15,6 +15,7 @@ import {
   StoreP3,
   TodoListP3,
   UntrackP3,
+  ViewTransitionP3,
 } from "./pattern3-demo.tsx";
 
 // ===== 素 JSX 版 (TS automatic runtime, compiler 不要) =====
@@ -102,5 +103,9 @@ if (app) {
     (<h2>Form dogfood</h2>) as Node,
     (<p>controlled input × 3 + onSubmit + {"@{ if-else }"} で submit 状態の分岐表示</p>) as Node,
     FormP3() as Node,
+    (<hr />) as Node,
+    (<h2>View Transitions dogfood</h2>) as Node,
+    (<p>signal.set を document.startViewTransition で wrap して browser 標準 fade</p>) as Node,
+    ViewTransitionP3() as Node,
   );
 }

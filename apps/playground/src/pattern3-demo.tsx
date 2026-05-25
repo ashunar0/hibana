@@ -267,6 +267,36 @@ component TodoListP3() {
   </div>;
 }
 
+// View Transitions API dogfood: signal 変更を `document.startViewTransition` で wrap
+// するだけで、 DOM 切替に browser 標準の fade animation が乗る。
+// 「signal は state を変える、 animation は browser に任せる」 という分担の dogfood。
+component ViewTransitionP3() {
+  const count = new Signal(0);
+
+  const onClick = () => {
+    if (typeof document.startViewTransition === "function") {
+      document.startViewTransition(async () => {
+        count.value++;
+        // Hibana scheduler は microtask 遅延なので、 callback 内で signal.set した直後は
+        // まだ DOM 反映されていない。 1 microtask 待ってから resolve することで、
+        // startViewTransition が「DOM 変更完了」 を正しく検出できる。
+        await new Promise((r) => queueMicrotask(r));
+      });
+    } else {
+      count.value++;
+    }
+  };
+
+  <div>
+    <button onClick={onClick}>p3-viewtransition increment ({count.value})</button>
+    <div className="vt-target">
+      @{ if (count.value === 0) <span>zero</span>
+         else if (count.value % 2 === 0) <strong>even {count.value}</strong>
+         else <em>odd {count.value}</em> }
+    </div>
+  </div>;
+}
+
 // Form dogfood: 複数 field controlled input + onSubmit + 結果プレビュー。
 // Signal ×4 (name / email / message / submitted) + @{ if-else } で submit 状態の分岐表示
 component FormP3() {
@@ -339,4 +369,5 @@ export {
   TodoListP3,
   DarkModeP3,
   FormP3,
+  ViewTransitionP3,
 };
