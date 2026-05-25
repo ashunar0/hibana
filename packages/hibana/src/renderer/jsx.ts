@@ -47,6 +47,10 @@ export function Fragment(props: { children?: Child } | undefined): Node {
   return frag;
 }
 
+// DOM property (setAttribute では反映されない) を直接代入する key 一覧。
+// controlled input 用 (T9.8): input.value / checkbox.checked / option.selected / input.indeterminate
+const DOM_PROPERTY_KEYS = new Set(["value", "checked", "selected", "indeterminate"]);
+
 function applyProp(el: Element, key: string, value: unknown): void {
   if (key.startsWith("on") && typeof value === "function") {
     el.addEventListener(key.slice(2).toLowerCase(), value as EventListener);
@@ -58,6 +62,18 @@ function applyProp(el: Element, key: string, value: unknown): void {
     return;
   }
 
+  // T9.8: input/checkbox 等の controlled input は DOM property に直接書く
+  // (setAttribute("value", ...) は initial value attribute だけ反映されて
+  //  user 入力後の .value property は変化しないので、 controlled にならない)
+  if (DOM_PROPERTY_KEYS.has(key)) {
+    if (typeof value === "function") {
+      effect(() => setDomProperty(el, key, (value as () => unknown)()));
+    } else {
+      setDomProperty(el, key, value);
+    }
+    return;
+  }
+
   // signal binding: function value は effect で wrap
   if (typeof value === "function") {
     effect(() => setAttr(el, key, (value as () => unknown)()));
@@ -65,6 +81,10 @@ function applyProp(el: Element, key: string, value: unknown): void {
   }
 
   setAttr(el, key, value);
+}
+
+function setDomProperty(el: Element, key: string, value: unknown): void {
+  (el as unknown as Record<string, unknown>)[key] = value ?? "";
 }
 
 function setAttr(el: Element, key: string, value: unknown): void {
