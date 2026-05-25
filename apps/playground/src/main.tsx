@@ -1,5 +1,15 @@
 import { Signal, onCleanup } from "hibana";
-import { AutoCounterP3, CounterP3, DoBlockP3, IfElseP3, ShowCaseP3 } from "./pattern3-demo.tsx";
+import {
+  AutoCounterP3,
+  ComputedP3,
+  CounterP3,
+  DoBlockP3,
+  IfElseP3,
+  OnMountP3,
+  ShowCaseP3,
+  StoreP3,
+  UntrackP3,
+} from "./pattern3-demo.tsx";
 
 // ===== 素 JSX 版 (TS automatic runtime, compiler 不要) =====
 
@@ -58,5 +68,15 @@ if (app) {
     DoBlockP3() as Node,
     (<p>{"@{ if-else }"} block-as-expression (T16-c):</p>) as Node,
     IfElseP3() as Node,
+    (<hr />) as Node,
+    (<h2>Phase 1.5 primitive dogfood</h2>) as Node,
+    (<p>T18 Computed (derived signals chain):</p>) as Node,
+    ComputedP3() as Node,
+    (<p>T19 Store (deep reactive, nested mutation, top-level replace):</p>) as Node,
+    StoreP3() as Node,
+    (<p>T21 onMount (mounts → microtask → status update):</p>) as Node,
+    OnMountP3() as Node,
+    (<p>T21 untrack (ignored signal does not rerender the surrounding text):</p>) as Node,
+    UntrackP3() as Node,
   );
 }
