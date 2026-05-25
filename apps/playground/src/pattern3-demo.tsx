@@ -160,6 +160,90 @@ component OptimisticP3() {
   </div>;
 }
 
+// T22: TodoList 統合 demo — Store / Signal / Computed / @{} を全部使う
+// list rendering は T9.7 (function child が array<Node> 返却) の上に成立
+component TodoListP3() {
+  type Todo = { id: number; text: string; done: boolean };
+  const state = new Store<{ items: Todo[]; filter: "all" | "active" | "done" }>({
+    items: [
+      { id: 1, text: "Phase 1.5 終わらせる", done: true },
+      { id: 2, text: "level 1.5 (Mutation + 楽観的更新)", done: true },
+      { id: 3, text: "T22 統合 demo", done: false },
+      { id: 4, text: "記事化", done: false },
+    ],
+    filter: "all",
+  });
+  const input = new Signal("");
+  let nextId = 5;
+
+  const remaining = new Computed(() => state.items.filter((t) => !t.done).length);
+
+  const visible = new Computed(() =>
+    state.items.filter((t) =>
+      state.filter === "all" ? true : state.filter === "active" ? !t.done : t.done,
+    ),
+  );
+
+  const add = () => {
+    const text = input.value.trim();
+    if (!text) return;
+    state.items.push({ id: nextId++, text, done: false });
+    input.value = "";
+  };
+
+  <div>
+    <form
+      onSubmit={(e: Event) => {
+        e.preventDefault();
+        add();
+      }}
+    >
+      <input
+        value={input.value}
+        onInput={(e: Event) => (input.value = (e.target as HTMLInputElement).value)}
+        placeholder="add a todo"
+      />
+      <button type="submit">add</button>
+    </form>
+    <div>
+      filter:
+      <button onClick={() => (state.filter = "all")}>all</button>
+      <button onClick={() => (state.filter = "active")}>active</button>
+      <button onClick={() => (state.filter = "done")}>done</button>
+      <span> (now: {state.filter})</span>
+    </div>
+    <ul>
+      {() =>
+        visible.value.map((item) => {
+          const li = document.createElement("li");
+          li.dataset.id = String(item.id);
+          li.style.textDecoration = item.done ? "line-through" : "none";
+          const cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.checked = item.done;
+          cb.addEventListener("change", () => {
+            const target = state.items.find((t) => t.id === item.id);
+            if (target) target.done = !target.done;
+          });
+          li.appendChild(cb);
+          li.appendChild(document.createTextNode(` ${item.text} `));
+          const del = document.createElement("button");
+          del.textContent = "x";
+          del.addEventListener("click", () => {
+            const i = state.items.findIndex((t) => t.id === item.id);
+            if (i >= 0) state.items.splice(i, 1);
+          });
+          li.appendChild(del);
+          return li;
+        })
+      }
+    </ul>
+    <p>
+      {remaining.value} remaining / {state.items.length} total
+    </p>
+  </div>;
+}
+
 export {
   CounterP3,
   AutoCounterP3,
@@ -172,4 +256,5 @@ export {
   UntrackP3,
   ResourceP3,
   OptimisticP3,
+  TodoListP3,
 };

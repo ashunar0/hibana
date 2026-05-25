@@ -10,6 +10,7 @@ import {
   ResourceP3,
   ShowCaseP3,
   StoreP3,
+  TodoListP3,
   UntrackP3,
 } from "./pattern3-demo.tsx";
 
@@ -84,5 +85,9 @@ if (app) {
     ResourceP3() as Node,
     (<p>T20+ Mutation + optimistic update (50% fake error → rollback):</p>) as Node,
     OptimisticP3() as Node,
+    (<hr />) as Node,
+    (<h2>T22 統合 demo</h2>) as Node,
+    (<p>TodoList: Store + Signal + Computed + reactive list rendering (T9.7)</p>) as Node,
+    TodoListP3() as Node,
   );
 }
