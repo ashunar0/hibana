@@ -1,3 +1,4 @@
+export { Computed } from "./reactivity/computed.ts";
 export { effect, onCleanup } from "./reactivity/effect.ts";
 export { Owner, getCurrentOwner, runWithOwner } from "./reactivity/owner.ts";
 export { flushSync } from "./reactivity/scheduler.ts";
