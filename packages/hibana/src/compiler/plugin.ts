@@ -62,10 +62,23 @@ export default function pattern3Plugin(): PluginObj {
   };
 }
 
-/** statement 列の最後を autoReturn で do-block 化 (in-place)。 */
+// for-collect モード用の collector 変数名 (do-block 内の生成変数なので衝突しないよう
+// 固定 reserved name、 ユーザコードでこの名前を使うことは想定しない)。
+const COLLECT_VAR = "__h_out";
+
+/** statement 列の最後を autoReturn で do-block 化 (in-place)。
+ *  末尾が for / for-of / for-in の場合は「array collect モード」 に切替: body 内末尾の
+ *  ExpressionStatement を `__h_out.push(...)` に書き換え、 stmts 全体を
+ *  `const __h_out = []; ...; for(...){ ... push ... }; return __h_out;` に展開 (T23)。
+ */
 function promoteLast(stmts: t.Statement[]): void {
   if (stmts.length === 0) return;
-  stmts[stmts.length - 1] = autoReturn(stmts[stmts.length - 1]);
+  const last = stmts[stmts.length - 1];
+  if (isForLike(last)) {
+    promoteForCollect(stmts);
+    return;
+  }
+  stmts[stmts.length - 1] = autoReturn(last);
 }
 
 /**
@@ -94,6 +107,61 @@ function autoReturn(stmt: t.Statement): t.Statement {
     return stmt;
   }
   return stmt;
+}
+
+type ForLike = t.ForStatement | t.ForOfStatement | t.ForInStatement;
+
+function isForLike(stmt: t.Statement): stmt is ForLike {
+  return t.isForStatement(stmt) || t.isForOfStatement(stmt) || t.isForInStatement(stmt);
+}
+
+/** for-collect モード: `for (X) <Item/>` の body を `__h_out.push(<Item/>)` に書き換え、
+ *  stmts に collector の宣言と return を前後注入する (T23 `@{ for (...) <Item/> }`)。
+ */
+function promoteForCollect(stmts: t.Statement[]): void {
+  const forStmt = stmts[stmts.length - 1] as ForLike;
+  rewriteForBodyToPush(forStmt, COLLECT_VAR);
+  stmts.unshift(makeCollectorDecl(COLLECT_VAR));
+  stmts.push(t.returnStatement(t.identifier(COLLECT_VAR)));
+}
+
+function makeCollectorDecl(name: string): t.VariableDeclaration {
+  return t.variableDeclaration("const", [
+    t.variableDeclarator(t.identifier(name), t.arrayExpression([])),
+  ]);
+}
+
+/** for の body 末尾の ExpressionStatement を `outName.push(expr)` に書き換える。
+ *  - body が BlockStatement: 内部末尾の ExpressionStatement のみ push 化 (前段の statement は維持)
+ *  - body 自体が ExpressionStatement (block なし): 全体を push に置き換え
+ *  - それ以外 (空 / control flow のみ): 触らない (= 空 list が返る)
+ */
+function rewriteForBodyToPush(forStmt: ForLike, outName: string): void {
+  const body = forStmt.body;
+  if (t.isBlockStatement(body)) {
+    if (body.body.length === 0) return;
+    const lastIdx = body.body.length - 1;
+    const last = body.body[lastIdx];
+    if (t.isExpressionStatement(last)) {
+      thunkifyIfJsx(last.expression);
+      body.body[lastIdx] = makePushStatement(outName, last.expression);
+    }
+    return;
+  }
+  if (t.isExpressionStatement(body)) {
+    thunkifyIfJsx(body.expression);
+    forStmt.body = makePushStatement(outName, body.expression);
+  }
+}
+
+function thunkifyIfJsx(expr: t.Expression): void {
+  if (t.isJSXElement(expr) || t.isJSXFragment(expr)) thunkifyJsx(expr);
+}
+
+function makePushStatement(outName: string, expr: t.Expression): t.ExpressionStatement {
+  return t.expressionStatement(
+    t.callExpression(t.memberExpression(t.identifier(outName), t.identifier("push")), [expr]),
+  );
 }
 
 type Markable = t.FunctionDeclaration | t.ArrowFunctionExpression;

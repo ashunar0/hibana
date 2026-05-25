@@ -243,29 +243,22 @@ component TodoListP3() {
       <span> (now: {state.filter})</span>
     </div>
     <ul>
-      {() =>
-        visible.value.map((item) => {
-          const li = document.createElement("li");
-          li.dataset.id = String(item.id);
-          li.style.textDecoration = item.done ? "line-through" : "none";
-          const cb = document.createElement("input");
-          cb.type = "checkbox";
-          cb.checked = item.done;
-          cb.addEventListener("change", () => {
-            const target = state.items.find((t) => t.id === item.id);
-            if (target) target.done = !target.done;
-          });
-          li.appendChild(cb);
-          li.appendChild(document.createTextNode(` ${item.text} `));
-          const del = document.createElement("button");
-          del.textContent = "x";
-          del.addEventListener("click", () => {
+      @{ for (const item of visible.value)
+        <li style={item.done ? "text-decoration: line-through" : ""}>
+          <input
+            type="checkbox"
+            checked={item.done}
+            onChange={() => {
+              const target = state.items.find((t) => t.id === item.id);
+              if (target) target.done = !target.done;
+            }}
+          />
+          {" "}{item.text}{" "}
+          <button onClick={() => {
             const i = state.items.findIndex((t) => t.id === item.id);
             if (i >= 0) state.items.splice(i, 1);
-          });
-          li.appendChild(del);
-          return li;
-        })
+          }}>x</button>
+        </li>
       }
     </ul>
     <p>

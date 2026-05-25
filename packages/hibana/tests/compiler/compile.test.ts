@@ -138,3 +138,65 @@ test("末尾が return 文の component はそのまま (二重 return 化しな
   // return が二重に巻かれていない
   expect(out).not.toMatch(/return\s+return/);
 });
+
+// T23: @{ for (X) <Item/> } の array collect モード
+
+test("@{ for-of <Item/> } が collector + push + return __h_out に展開される", () => {
+  const src = `component List() {
+  const items = state.items;
+  <ul>@{ for (const item of items) <li>{item.text}</li> }</ul>;
+}`;
+  const out = compile(src);
+  expect(out).toContain("function List()");
+  // collector 宣言
+  expect(out).toMatch(/const\s+__h_out\s*=\s*\[\]/);
+  // for-of body が push に書き換わる
+  expect(out).toMatch(/for\s*\(const item of items\)\s*__h_out\.push\(<li>/);
+  // 末尾の return __h_out
+  expect(out).toMatch(/return\s+__h_out;/);
+  // marker は残らない
+  expect(out).not.toContain("@hib-do");
+});
+
+test("@{ for (block 本体) } の末尾 JSX のみ push 化、 前段 statement は残す", () => {
+  const src = `component List() {
+  <ul>@{ for (const item of items) {
+    const label = item.text + "!";
+    <li>{label}</li>
+  } }</ul>;
+}`;
+  const out = compile(src);
+  // block 内の前段 statement は維持
+  expect(out).toContain('const label = item.text + "!";');
+  // block 末尾の JSX が push に
+  expect(out).toMatch(/__h_out\.push\(<li>/);
+});
+
+test("@{ for(;;) } (C-style) も collect 対応", () => {
+  const src = `component List() {
+  <ul>@{ for (let i = 0; i < 3; i++) <li>{i}</li> }</ul>;
+}`;
+  const out = compile(src);
+  expect(out).toMatch(/for\s*\(let i = 0; i < 3; i\+\+\)\s*__h_out\.push\(<li>/);
+  expect(out).toMatch(/return\s+__h_out;/);
+});
+
+test("@{ for } 内の {item.text} は thunk 化される (signal-binding と同じ pipeline)", () => {
+  const src = `component List() {
+  <ul>@{ for (const item of items) <li>{item.text}</li> }</ul>;
+}`;
+  const out = compile(src);
+  // item.text が thunk 化されて DOM update reactive
+  expect(out).toMatch(/<li>\{\(\)\s*=>\s*item\.text\}<\/li>/);
+});
+
+test("@{ for } の前に statement がある場合も collect される", () => {
+  const src = `component List() {
+  <ul>@{ const sorted = items.slice().sort(); for (const item of sorted) <li>{item.text}</li> }</ul>;
+}`;
+  const out = compile(src);
+  // 前段 statement は維持
+  expect(out).toContain("const sorted = items.slice().sort();");
+  // for は collect 化
+  expect(out).toMatch(/for\s*\(const item of sorted\)\s*__h_out\.push\(<li>/);
+});
