@@ -5,6 +5,7 @@ import {
   CounterP3,
   DarkModeP3,
   DoBlockP3,
+  FormP3,
   GlitchFreeP3,
   IfElseP3,
   OnMountP3,
@@ -97,5 +98,9 @@ if (app) {
     (<h2>Dark mode dogfood</h2>) as Node,
     (<p>Signal + onMount (load) + effect (DOM + localStorage)</p>) as Node,
     DarkModeP3() as Node,
+    (<hr />) as Node,
+    (<h2>Form dogfood</h2>) as Node,
+    (<p>controlled input × 3 + onSubmit + {"@{ if-else }"} で submit 状態の分岐表示</p>) as Node,
+    FormP3() as Node,
   );
 }

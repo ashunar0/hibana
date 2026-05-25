@@ -267,6 +267,39 @@ component TodoListP3() {
   </div>;
 }
 
+// Form dogfood: 複数 field controlled input + onSubmit + 結果プレビュー。
+// Signal ×4 (name / email / message / submitted) + @{ if-else } で submit 状態の分岐表示
+component FormP3() {
+  const name = new Signal("");
+  const email = new Signal("");
+  const message = new Signal("");
+  const submitted = new Signal<{ name: string; email: string; message: string } | null>(null);
+
+  const onSubmit = (e: Event) => {
+    e.preventDefault();
+    submitted.value = { name: name.value, email: email.value, message: message.value };
+  };
+
+  <form onSubmit={onSubmit}>
+    <p>
+      <label>p3-form name: </label>
+      <input value={name.value} onInput={(e) => (name.value = e.currentTarget.value)} />
+    </p>
+    <p>
+      <label>email: </label>
+      <input value={email.value} onInput={(e) => (email.value = e.currentTarget.value)} />
+    </p>
+    <p>
+      <label>message: </label>
+      <textarea value={message.value} onInput={(e) => (message.value = e.currentTarget.value)}></textarea>
+    </p>
+    <button type="submit">submit</button>
+    <p>preview: name={name.value} / email={email.value} / message={message.value}</p>
+    @{ if (submitted.value) <p>submitted: {JSON.stringify(submitted.value)}</p>
+       else <p>not submitted yet</p> }
+  </form>;
+}
+
 // Dark mode toggle: Signal + onMount (localStorage 読み込み) + effect (DOM + localStorage 書き込み)
 // 主軸方針「動的なら JS で書く」 の延長で、 side effect (document.documentElement.dataset / localStorage)
 // は effect 内に閉じて signal-native に書ける、 ことの dogfood
@@ -305,4 +338,5 @@ export {
   OptimisticP3,
   TodoListP3,
   DarkModeP3,
+  FormP3,
 };
