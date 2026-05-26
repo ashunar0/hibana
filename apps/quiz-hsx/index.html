@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hibana Quiz (hsx / Pattern 3 syntax)</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+      }
+      body {
+        max-width: 640px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        background: #16a34a;
+        color: #fff;
+        font-size: 0.75rem;
+        font-weight: bold;
+      }
+      .choice {
+        display: block;
+        width: 100%;
+        text-align: left;
+        padding: 0.5rem 1rem;
+        margin: 0.25rem 0;
+        border: 1px solid #999;
+        background: transparent;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .choice:hover {
+        background: rgba(128, 128, 128, 0.1);
+      }
+      .nav {
+        margin-top: 1rem;
+      }
+      .nav button {
+        padding: 0.4rem 1rem;
+        margin-right: 0.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
