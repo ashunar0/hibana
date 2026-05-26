@@ -1,23 +1,8 @@
-# tsdown-starter
+# hibana
 
-A starter for creating a TypeScript package.
+Hibana server (Hono integration) — Phase 3 placeholder。
 
-## Development
+T15.5 (3-package split) で `packages/hibana` は将来の `hibana-server` 用の名前枠として残し、 中身は Phase 3 で実装する。
 
-- Install dependencies:
-
-```bash
-npm install
-```
-
-- Run the unit tests:
-
-```bash
-npm run test
-```
-
-- Build the library:
-
-```bash
-npm run build
-```
+- 現 reactivity / renderer / jsx-runtime → [`hibana-core`](../hibana-core/)
+- 現 compiler / vite-plugin → [`hibana-compiler`](../hibana-compiler/)

@@ -57,7 +57,7 @@ test("does NOT replace within other identifiers (subcomponent / componentName)",
 });
 
 test("realistic Counter snippet", () => {
-  const src = `import { Signal } from "hibana"
+  const src = `import { Signal } from "hibana-core"
 
 component Counter() {
   const count = new Signal(0)

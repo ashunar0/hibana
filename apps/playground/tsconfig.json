@@ -9,7 +9,7 @@
     /* Bundler mode */
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
-    "jsxImportSource": "hibana",
+    "jsxImportSource": "hibana-core",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",

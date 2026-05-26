@@ -1,4 +1,4 @@
-import { Signal, onCleanup } from "hibana";
+import { Signal, onCleanup } from "hibana-core";
 import {
   AutoCounterP3,
   ComputedP3,
@@ -59,7 +59,7 @@ if (app) {
   app.append(
     (<h1>Hibana playground</h1>) as Node,
     (<h2>素 JSX 経路 (compiler 抜き)</h2>) as Node,
-    (<p>TS automatic runtime + jsxImportSource: "hibana"</p>) as Node,
+    (<p>TS automatic runtime + jsxImportSource: "hibana-core"</p>) as Node,
     Counter() as Node,
     AutoCounter() as Node,
     (<p>reactive Node-child (T9.6):</p>) as Node,

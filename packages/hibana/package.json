@@ -1,7 +1,8 @@
 {
   "name": "hibana",
   "version": "0.0.0",
-  "description": "Signal-based UI runtime for Hibana (WIP)",
+  "private": true,
+  "description": "Hibana server (Hono integration) — placeholder, Phase 3 で実装予定",
   "homepage": "https://github.com/author/library#readme",
   "bugs": {
     "url": "https://github.com/author/library/issues"
@@ -12,69 +13,9 @@
     "type": "git",
     "url": "git+https://github.com/author/library.git"
   },
-  "files": [
-    "dist"
-  ],
   "type": "module",
-  "exports": {
-    ".": "./dist/index.mjs",
-    "./jsx-dev-runtime": "./dist/jsx-dev-runtime.mjs",
-    "./jsx-runtime": "./dist/jsx-runtime.mjs",
-    "./vite-plugin": "./dist/vite-plugin/index.mjs",
-    "./package.json": "./package.json"
-  },
   "scripts": {
-    "build": "vp pack",
-    "dev": "vp pack --watch",
-    "test": "vp test",
-    "typecheck": "tsc --noEmit",
-    "release": "bumpp",
-    "prepublishOnly": "pnpm run build"
-  },
-  "devDependencies": {
-    "@babel/generator": "catalog:",
-    "@babel/parser": "catalog:",
-    "@babel/plugin-syntax-jsx": "catalog:",
-    "@babel/traverse": "catalog:",
-    "@babel/types": "catalog:",
-    "@types/babel__core": "catalog:",
-    "@types/babel__generator": "catalog:",
-    "@types/babel__traverse": "catalog:",
-    "@types/node": "^25.6.2",
-    "@typescript/native-preview": "7.0.0-dev.20260509.2",
-    "bumpp": "^11.1.0",
-    "happy-dom": "catalog:",
-    "typescript": "^6.0.3",
-    "vite": "^8.0.14",
-    "vite-plus": "catalog:",
-    "vitest": "catalog:"
-  },
-  "peerDependencies": {
-    "vite": ">=5"
-  },
-  "peerDependenciesMeta": {
-    "vite": {
-      "optional": true
-    }
-  },
-  "inlinedDependencies": {
-    "@babel/code-frame": "7.29.0",
-    "@babel/generator": "7.29.1",
-    "@babel/helper-globals": "7.28.0",
-    "@babel/helper-string-parser": "7.27.1",
-    "@babel/helper-validator-identifier": "7.28.5",
-    "@babel/parser": "7.29.3",
-    "@babel/template": "7.28.6",
-    "@babel/traverse": "7.29.0",
-    "@babel/types": "7.29.0",
-    "@jridgewell/gen-mapping": "0.3.13",
-    "@jridgewell/resolve-uri": "3.1.2",
-    "@jridgewell/sourcemap-codec": "1.5.5",
-    "@jridgewell/trace-mapping": "0.3.31",
-    "debug": "4.4.3",
-    "js-tokens": "4.0.0",
-    "jsesc": "3.1.0",
-    "ms": "2.1.3",
-    "picocolors": "1.1.1"
+    "build": "echo 'hibana (server placeholder): nothing to build yet'",
+    "test": "echo 'hibana (server placeholder): no tests yet'"
   }
 }

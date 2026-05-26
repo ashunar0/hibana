@@ -15,7 +15,7 @@ import {
   onCleanup,
   onMount,
   untrack,
-} from "hibana";
+} from "hibana-core";
 
 component CounterP3() {
   const count = new Signal(0);
