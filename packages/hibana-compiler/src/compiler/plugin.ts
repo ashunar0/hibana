@@ -29,11 +29,16 @@ import { HBN_COMPONENT_MARKER } from "./transform-component.ts";
  *      body 末尾も同じ `autoReturn()` で処理 (T16-b / T16-c)。
  *   3. component scope / do-block scope 内の JSX child expression を thunk 化:
  *      `{count.value}` → `{() => count.value}` (signal binding)
- *   4. JSX attribute expression も thunk 化、 ただし以下は例外:
+ *   4. intrinsic element (lowercase tag = `<button/>` 等) の attribute は
+ *      DOM property/attribute への reactive binding を成立させるため thunk 化、 ただし:
  *      - `on*` event handler (`onClick={...}`) → そのまま (1 回 attach)
  *      - `ref={...}` → そのまま (callback ref)
  *      - 既に function literal (`{() => x}`) → そのまま (二重 thunk 化を避ける)
  *      - 静的 literal (`{42}`, `{"x"}`) → そのまま (reactive にする必要なし)
+ *   5. component element (PascalCase tag = `<Counter/>` 等) の attribute は
+ *      関数 props として渡るため thunk 化しない (React 慣習で大文字始まり判定)。
+ *      reactive な値を component に渡したいときは `<Counter prop={() => sig.value}/>`
+ *      のように呼び出し側で thunk を書き、 受け側で `props.prop()` で読み出す。
  */
 export default function pattern3Plugin(): PluginObj {
   return {
@@ -197,8 +202,11 @@ function thunkifyJsx(node: t.JSXElement | t.JSXFragment): void {
     // JSXText / JSXSpreadChild はそのまま
   }
 
-  // attributes (JSXElement のみ)
+  // attributes (JSXElement のみ): intrinsic tag (lowercase) だけ thunk 化、
+  // component tag (PascalCase) は props として関数引数に渡るので thunk 化しない。
   if (t.isJSXElement(node)) {
+    if (isComponentTag(node.openingElement.name)) return;
+
     for (const attr of node.openingElement.attributes) {
       if (!t.isJSXAttribute(attr)) continue; // JSXSpreadAttribute は skip
       const name = attr.name;
@@ -214,6 +222,14 @@ function thunkifyJsx(node: t.JSXElement | t.JSXFragment): void {
       }
     }
   }
+}
+
+/** PascalCase tag = component と判定 (React 慣習)。 JSXMemberExpression / JSXNamespacedName は
+ *  intrinsic 扱い (現状 Hibana では未使用、 必要なら将来拡張)。 */
+function isComponentTag(name: t.JSXOpeningElement["name"]): boolean {
+  if (!t.isJSXIdentifier(name)) return false;
+  const first = name.name[0];
+  return first !== undefined && first >= "A" && first <= "Z";
 }
 
 function isEventOrRefAttr(name: string): boolean {

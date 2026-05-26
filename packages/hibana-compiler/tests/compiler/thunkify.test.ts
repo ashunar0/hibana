@@ -88,6 +88,24 @@ test("mixed: static text + signal in same children", () => {
   expect(out).toContain("before {() => count.value} after");
 });
 
+test("component (PascalCase tag) の attribute は thunk 化されない (props として渡る)", () => {
+  // <Counter index={step.value - 1}/> のような case。
+  // intrinsic と同じく thunk 化すると props.index が () => ... の関数になり、
+  // 受け側で props.index() のような書き換えが要る → React 慣習で大文字始まりは component と判定
+  const out = compileInComponent("<MyComp index={step.value - 1} name={user.name}>x</MyComp>");
+  expect(out).toContain("index={step.value - 1}");
+  expect(out).toContain("name={user.name}");
+  expect(out).not.toContain("() => step.value - 1");
+  expect(out).not.toContain("() => user.name");
+});
+
+test("intrinsic (lowercase tag) の attribute は thunk 化される (signal binding)", () => {
+  // 既存の attribute thunk 化が回帰してないか
+  const out = compileInComponent("<input value={text.value} disabled={busy.value}/>");
+  expect(out).toContain("value={() => text.value}");
+  expect(out).toContain("disabled={() => busy.value}");
+});
+
 test("非 component の function 内 JSX は thunk 化されない (component scope 限定)", () => {
   const src = `function helper() {
   const x = <button>{count.value}</button>;
