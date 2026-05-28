@@ -10,7 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const quizHsxApp = resolve(__dirname, "../../../../apps/quiz-hsx/src/App.tsx");
 
 describe("extractIslands", () => {
-  it("inline source からの抽出: name / props 構造", () => {
+  it("inline source からの抽出: name / props / interactive 構造", () => {
     const source = `
       import { Signal } from "hibana-core";
 
@@ -34,6 +34,10 @@ describe("extractIslands", () => {
     expect(islands[0]?.props).toEqual([]);
     expect(islands[1]?.props).toEqual(["props"]);
     expect(islands[2]?.props).toEqual(["title", "count"]);
+    // Counter は reactive read を含むので interactive、 Greet / WithDestructure は static
+    expect(islands[0]?.interactive).toBe(true);
+    expect(islands[1]?.interactive).toBe(false);
+    expect(islands[2]?.interactive).toBe(false);
   });
 
   it("helper function や useFoo は除外される (marker comment が無いから)", () => {

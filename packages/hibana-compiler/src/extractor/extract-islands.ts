@@ -9,6 +9,7 @@ import { parse } from "@babel/parser";
 import _traverse, { type TraverseOptions } from "@babel/traverse";
 import { transformAtBlock } from "../compiler/transform-at-block.ts";
 import { HBN_COMPONENT_MARKER, transformComponent } from "../compiler/transform-component.ts";
+import { analyzeInteractivity } from "./analyze-interactivity.ts";
 
 // oxlint-disable-next-line typescript/no-explicit-any -- Babel CJS interop の慣用句
 const traverse = ((_traverse as any).default ?? _traverse) as typeof _traverse;
@@ -17,6 +18,8 @@ export interface IslandInfo {
   name: string;
   line: number;
   props: string[];
+  interactive: boolean;
+  reasons: string[];
 }
 
 export function extractIslands(source: string): IslandInfo[] {
@@ -51,10 +54,14 @@ export function extractIslands(source: string): IslandInfo[] {
         }
       }
 
+      const { interactive, reasons } = analyzeInteractivity(path);
+
       islands.push({
         name: fn.id.name,
         line: fn.loc?.start.line ?? -1,
         props,
+        interactive,
+        reasons,
       });
     },
   } satisfies TraverseOptions);
@@ -67,7 +74,11 @@ export function formatIslands(islands: IslandInfo[], label: string): string {
   for (const i of islands) {
     const propsLabel =
       i.props.length === 0 ? "0 props" : `${i.props.length} props: ${i.props.join(", ")}`;
-    lines.push(`  - ${i.name} (line ${i.line}, ${propsLabel})`);
+    const kind = i.interactive ? "client" : "static";
+    lines.push(`  - ${i.name} [${kind}] (line ${i.line}, ${propsLabel})`);
+    if (i.interactive) {
+      for (const reason of i.reasons) lines.push(`      ${reason}`);
+    }
   }
   return lines.join("\n");
 }
