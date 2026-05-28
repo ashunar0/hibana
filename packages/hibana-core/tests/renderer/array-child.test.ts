@@ -14,8 +14,8 @@ test("function child returning array<Node> mounts all items in order", () => {
       }),
   }) as HTMLElement;
 
-  // anchor (空 text) + 3 li
-  expect(el.childNodes.length).toBe(4);
+  // start marker + 3 li + end marker
+  expect(el.childNodes.length).toBe(5);
   expect(el.textContent).toBe("item-1item-2item-3");
 });
 
@@ -30,16 +30,16 @@ test("array → array (length change) re-renders correctly", () => {
       }),
   }) as HTMLElement;
 
-  expect(el.childNodes.length).toBe(3); // 2 li + anchor
+  expect(el.childNodes.length).toBe(4); // start marker + 2 li + end marker
 
   items.value = [10, 20, 30, 40];
   flushSync();
-  expect(el.childNodes.length).toBe(5); // 4 li + anchor
+  expect(el.childNodes.length).toBe(6); // start marker + 4 li + end marker
   expect(el.textContent).toBe("10203040");
 
   items.value = [];
   flushSync();
-  expect(el.childNodes.length).toBe(1); // anchor のみ
+  expect(el.childNodes.length).toBe(2); // markers のみ
   expect(el.textContent).toBe("");
 });
 
@@ -60,12 +60,12 @@ test("array → single Node 切替", () => {
     },
   }) as HTMLElement;
 
-  expect(el.childNodes.length).toBe(4); // 3 span + anchor
+  expect(el.childNodes.length).toBe(5); // start marker + 3 span + end marker
   expect(el.textContent).toBe("123");
 
   showArray.value = false;
   flushSync();
-  expect(el.childNodes.length).toBe(1); // p のみ (anchor は消える)
+  expect(el.childNodes.length).toBe(3); // start marker + p + end marker
   expect(el.textContent).toBe("single");
 });
 
@@ -86,12 +86,12 @@ test("single Node → array 切替", () => {
     },
   }) as HTMLElement;
 
-  expect(el.childNodes.length).toBe(1);
+  expect(el.childNodes.length).toBe(3); // start marker + p + end marker
   expect(el.textContent).toBe("init");
 
   showArray.value = true;
   flushSync();
-  expect(el.childNodes.length).toBe(3); // 2 span + anchor
+  expect(el.childNodes.length).toBe(4); // start marker + 2 span + end marker
   expect(el.textContent).toBe("12");
 });
 
@@ -112,7 +112,7 @@ test("primitive → array 切替", () => {
 
   mode.value = "array";
   flushSync();
-  expect(el.childNodes.length).toBe(3);
+  expect(el.childNodes.length).toBe(4); // start marker + 2 span + end marker
   expect(el.textContent).toBe("12");
 
   mode.value = "primitive";
@@ -128,8 +128,8 @@ test("array can contain primitives mixed with Nodes", () => {
   span.textContent = "X";
   items.value = ["a", span, "b"];
   flushSync();
-  // anchor + 3 children
-  expect(el.childNodes.length).toBe(4);
+  // start marker + 3 children + end marker
+  expect(el.childNodes.length).toBe(5);
   expect(el.textContent).toBe("aXb");
 });
 
@@ -139,8 +139,8 @@ test("nested array is flattened", () => {
     [3, [4, 5]],
   ]);
   const el = jsx("div", { children: () => data.value }) as HTMLElement;
-  // anchor + 5 text nodes
-  expect(el.childNodes.length).toBe(6);
+  // start marker + 5 text nodes + end marker
+  expect(el.childNodes.length).toBe(7);
   expect(el.textContent).toBe("12345");
 });
 

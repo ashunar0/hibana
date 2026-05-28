@@ -37,11 +37,12 @@ test("static children around a reactive child do not re-render", () => {
     children: ["before ", () => count.value, " after"],
   }) as HTMLElement;
 
-  expect(el.childNodes.length).toBe(3);
+  // "before " text + start marker + dynamic text + end marker + " after" text
+  expect(el.childNodes.length).toBe(5);
 
   count.value = 42;
   flushSync();
-  expect(el.childNodes.length).toBe(3);
+  expect(el.childNodes.length).toBe(5);
   expect(el.textContent).toBe("before 42 after");
 });
 
@@ -160,7 +161,8 @@ test("function child swaps Node when signal flips (Node → Node)", () => {
   flushSync();
   expect(el.contains(a)).toBe(false);
   expect(el.contains(b)).toBe(true);
-  expect(el.childNodes.length).toBe(1);
+  // start marker + b + end marker
+  expect(el.childNodes.length).toBe(3);
 });
 
 test("function child swaps from Node to primitive", () => {
@@ -174,7 +176,8 @@ test("function child swaps from Node to primitive", () => {
   flushSync();
   expect(el.contains(node)).toBe(false);
   expect(el.textContent).toBe("text");
-  expect(el.childNodes.length).toBe(1);
+  // start marker + text node + end marker
+  expect(el.childNodes.length).toBe(3);
 });
 
 test("function child swaps from primitive to Node", () => {
@@ -187,21 +190,24 @@ test("function child swaps from primitive to Node", () => {
   showNode.value = true;
   flushSync();
   expect(el.contains(node)).toBe(true);
-  expect(el.childNodes.length).toBe(1);
+  // start marker + node + end marker
+  expect(el.childNodes.length).toBe(3);
 });
 
 test("function child returning null then a Node", () => {
   const value = new Signal<HTMLElement | null>(null);
   const el = jsx("div", { children: () => value.value }) as HTMLElement;
   expect(el.textContent).toBe("");
-  expect(el.childNodes.length).toBe(1); // 空 text node が 1 個
+  // start marker + 空 text node + end marker
+  expect(el.childNodes.length).toBe(3);
 
   const p = document.createElement("p");
   p.textContent = "hi";
   value.value = p;
   flushSync();
   expect(el.contains(p)).toBe(true);
-  expect(el.childNodes.length).toBe(1);
+  // start marker + p + end marker
+  expect(el.childNodes.length).toBe(3);
 });
 
 test("static siblings around a reactive Node-child do not move", () => {
@@ -214,10 +220,11 @@ test("static siblings around a reactive Node-child do not move", () => {
     children: ["before ", () => (showA.value ? a : b), " after"],
   }) as HTMLElement;
 
-  expect(el.childNodes.length).toBe(3);
+  // "before " + start marker + a + end marker + " after"
+  expect(el.childNodes.length).toBe(5);
   showA.value = false;
   flushSync();
-  expect(el.childNodes.length).toBe(3);
+  expect(el.childNodes.length).toBe(5);
   expect(el.firstChild?.textContent).toBe("before ");
   expect(el.lastChild?.textContent).toBe(" after");
 });

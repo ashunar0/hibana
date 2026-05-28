@@ -126,60 +126,60 @@ function appendChild(parent: Node, child: Child): void {
     return;
   }
 
-  // signal binding: function child は effect 内で slot を更新
-  // - return が Node → replaceChild で差し替え (Show 相当の DOM 切替、 childNodes.length 不変)
-  // - return が primitive → text node を 1 個維持して data 更新 (DOM churn 回避)
-  // - return が array → anchor (空 text node) + nodes 群を anchor の前に insert
-  //   (T9.7: list rendering 対応、 keyed diff なしの naive replace、 keyed は Phase 2)
+  // signal binding: function child は effect 内で slot を更新。 dynamic slot は
+  // **comment marker pair** で囲んで管理する (design.md §9 Solid 流 hydrate の土台)。
+  //
+  // - SSR で element の outerHTML を取ると marker comment は HTML に焼かれる
+  //   (`<p>Hello, <!--$-->あさひ<!--/$-->!</p>`)。 client が innerHTML parse すると
+  //   comment node はそのまま保持される。 hydrate モードはこの marker を anchor として
+  //   「動的 slot の position」 を identify できる (B-2 で導入)。
+  // - 既存挙動 (effect で reactive update) は完全保持: 単一 textNode は data 書き戻しで
+  //   DOM churn 回避、 Node 切替は replaceChild、 array は marker 間に insertBefore で
+  //   list rendering。
+  //
+  // 挙動: dynamic slot 1 個ごとに parent の childNodes が +2 (start marker + end marker)。
   if (typeof child === "function") {
+    const startMark = document.createComment("");
+    const endMark = document.createComment("");
+    parent.appendChild(startMark);
+    parent.appendChild(endMark);
+
     let currentSingle: Node | null = null;
-    let currentArray: { anchor: Text; nodes: Node[] } | null = null;
+    let currentArrayNodes: Node[] | null = null;
 
     effect(() => {
       const v = (child as () => unknown)();
 
       if (Array.isArray(v)) {
-        // anchor 方式に切替 or 維持
-        if (currentSingle) {
-          const anchor = document.createTextNode("");
-          parent.replaceChild(anchor, currentSingle);
-          currentSingle = null;
-          currentArray = { anchor, nodes: [] };
-        } else if (!currentArray) {
-          const anchor = document.createTextNode("");
-          parent.appendChild(anchor);
-          currentArray = { anchor, nodes: [] };
+        // 既存 content を marker 間から除去 (single or 旧 array)
+        if (currentSingle?.parentNode === parent) parent.removeChild(currentSingle);
+        currentSingle = null;
+        if (currentArrayNodes) {
+          for (const n of currentArrayNodes) {
+            if (n.parentNode === parent) parent.removeChild(n);
+          }
         }
+        currentArrayNodes = [];
 
-        // 旧 nodes を remove
-        for (const n of currentArray.nodes) {
-          if (n.parentNode === parent) parent.removeChild(n);
-        }
-        currentArray.nodes = [];
-
-        // flatten + 新 nodes を anchor の前に insert
+        // flatten + 新 nodes を end marker の前に insert
         const flat = flattenArrayChild(v);
         for (const item of flat) {
           const node = toNode(item);
-          parent.insertBefore(node, currentArray.anchor);
-          currentArray.nodes.push(node);
+          parent.insertBefore(node, endMark);
+          currentArrayNodes.push(node);
         }
         return;
       }
 
       // array → single 切替
-      if (currentArray) {
-        for (const n of currentArray.nodes) {
+      if (currentArrayNodes) {
+        for (const n of currentArrayNodes) {
           if (n.parentNode === parent) parent.removeChild(n);
         }
-        const next = toNode(v);
-        parent.replaceChild(next, currentArray.anchor);
-        currentArray = null;
-        currentSingle = next;
-        return;
+        currentArrayNodes = null;
       }
 
-      // 単一 path (既存最適化)
+      // 単一 path: 既存 textNode 書き戻し (DOM churn 回避)
       if (currentSingle?.nodeType === 3 /* TEXT_NODE */ && !(v instanceof Node)) {
         (currentSingle as Text).data = stringifyChild(v);
         return;
@@ -189,7 +189,7 @@ function appendChild(parent: Node, child: Child): void {
       if (currentSingle?.parentNode === parent) {
         parent.replaceChild(next, currentSingle);
       } else {
-        parent.appendChild(next);
+        parent.insertBefore(next, endMark);
       }
       currentSingle = next;
     });
