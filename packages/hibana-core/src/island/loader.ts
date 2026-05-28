@@ -1,12 +1,22 @@
 // Island mount loader: `<hbn-island name="Foo" data-props="...">` を全部探して、
-// manifest (`/islands.json`) から chunk URL を引いて dynamic import → 該当 component を
-// Fragment 経由で render → placeholder を replaceWith。
+// manifest (`/islands.json`) から chunk URL を引いて dynamic import → component を mount。
+//
+// 2 つの mount path:
+//   - SSR 済み (build 時 closeBundle で焼き込まれた、 `el.firstElementChild` あり):
+//     hydrateInto で hydrate モード起動 → 既存 DOM tree に event handler と signal binding
+//     effect だけ attach、 DOM churn / flicker なし (design.md §9 Solid 流)
+//   - 非 SSR (dev / 空 placeholder): 従来通り Fragment で wrap → `el.replaceWith(wrapper)`
+//     で再 render
+//
+// hydrate 済の `<hbn-island>` には `data-hydrated` 属性を立てて再 hydrate を防ぐ
+// (hydrate モードでは `<hbn-island>` 自体が DOM に残るため、 querySelectorAll が
+// 同じ要素を毎 wave で拾うのを回避)。
 //
 // chunk フィールド有 (= build): production の hashed asset URL を使う。
 // chunk フィールド無 (= dev): Vite virtual module URL (`/@id/__x00__virtual:hibana-island/<Name>`)
 // を fallback で使い、 vite-plugin の load hook が source ファイルの default re-export を返す。
 
-import { Fragment, jsx } from "../renderer/jsx.ts";
+import { Fragment, hydrateInto, jsx } from "../renderer/jsx.ts";
 
 interface IslandManifestEntry {
   source: string;
@@ -37,11 +47,16 @@ export async function mountIslands(opts: MountIslandsOptions = {}): Promise<void
     return;
   }
 
-  // 再帰的に hydrate: parent island を hydrate すると child placeholder
-  // (<hbn-island name="Counter"/> 等) が新たに DOM に現れる。 一度の querySelectorAll
-  // では拾えないので、 wave 単位で繰り返す。 階層深度 10 で打ち切り (循環 mount 防止)。
+  // wave 単位で繰り返す:
+  //   - replaceWith path (非 SSR): el が DOM から消えて中身が新規 placeholder を含む可能性
+  //   - hydrate path (SSR 済): el は残るが `data-hydrated` を立てて selector で除外、
+  //     hydrate 中に jsx で子 `<hbn-island>` element を採用するが内部は触らない
+  //     → 次 wave で child placeholder を見つけて hydrate
+  // どちらも「対象が無くなったら break」 で収束する。 階層深度 10 で打ち切り (安全弁)。
   for (let i = 0; i < 10; i++) {
-    const placeholders = Array.from(document.querySelectorAll<HTMLElement>("hbn-island[name]"));
+    const placeholders = Array.from(
+      document.querySelectorAll<HTMLElement>("hbn-island[name]:not([data-hydrated])"),
+    );
     if (placeholders.length === 0) return;
     await Promise.all(placeholders.map((el) => hydrateOne(el, manifest)));
   }
@@ -85,6 +100,17 @@ async function hydrateOne(el: HTMLElement, manifest: IslandManifest): Promise<vo
   const Component = registry?.[name];
   if (typeof Component !== "function") {
     console.warn(`[hibana] island "${name}": not found in registry after import`);
+    return;
+  }
+
+  // SSR 済 (中身が焼き込まれてる) なら hydrate モードで既存 DOM を引き継ぐ。
+  // 空 placeholder (dev or 非 SSR build) なら従来の replaceWith fallback。
+  // 再 hydrate 防止のため処理開始前に data-hydrated を立てる。
+  if (el.firstElementChild) {
+    el.setAttribute("data-hydrated", "");
+    hydrateInto(el, () => {
+      jsx(Component as (p: Record<string, unknown>) => Node, props);
+    });
     return;
   }
 

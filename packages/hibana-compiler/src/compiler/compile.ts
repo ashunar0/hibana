@@ -5,6 +5,7 @@ import pattern3Plugin from "./plugin.ts";
 import { transformAtBlock } from "./transform-at-block.ts";
 import { transformComponent } from "./transform-component.ts";
 import islandPlugin from "./transform-island.ts";
+import lazyChildrenPlugin from "./transform-lazy-children.ts";
 
 // Babel パッケージの CJS interop: bundler によっては `.default` 経由でしか取れない
 // (Solid / Vite plugin 等で同じ workaround を採用)。
@@ -28,7 +29,10 @@ const traverse = ((_traverse as any).default ?? _traverse) as typeof _traverse;
  *   4. Babel traverse + islandPlugin: PascalCase JSXElement (`<Counter/>`) を
  *      `<hbn-island name="Counter" data-props={...}/>` に書き換え、 per-island chunk
  *      split を成立させる
- *   5. Babel generate: AST → JS string
+ *   5. Babel traverse + lazyChildrenPlugin: intrinsic element の children に JSX が
+ *      含まれる場合、 `<el>{() => [...children]}</el>` の lazy thunk で wrap。 hydrate
+ *      モードで eval order を DFS にするための土台 (Solid 流 hydrate と等価な semantics)
+ *   6. Babel generate: AST → JS string
  *
  * `(() => expr)` は ArrowFunctionExpression なので plugin の thunkify は二重 wrap しない
  * (shouldThunkify が ArrowFunction を除外する)。 JSX child / attribute として置かれた
@@ -48,6 +52,9 @@ export function compile(source: string): string {
 
   const island = islandPlugin();
   traverse(ast, island.visitor as TraverseOptions);
+
+  const lazyChildren = lazyChildrenPlugin();
+  traverse(ast, lazyChildren.visitor as TraverseOptions);
 
   return generate(ast).code;
 }

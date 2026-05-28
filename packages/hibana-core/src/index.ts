@@ -8,4 +8,4 @@ export { Signal } from "./reactivity/signal.ts";
 export { Store } from "./reactivity/store.ts";
 export { mountIslands, type MountIslandsOptions } from "./island/loader.ts";
 export type { Child, Component, Props } from "./renderer/jsx.ts";
-export { Fragment, jsx, jsxs } from "./renderer/jsx.ts";
+export { Fragment, hydrateInto, jsx, jsxs } from "./renderer/jsx.ts";
