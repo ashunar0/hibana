@@ -37,55 +37,62 @@ export async function mountIslands(opts: MountIslandsOptions = {}): Promise<void
     return;
   }
 
-  const placeholders = Array.from(document.querySelectorAll<HTMLElement>("hbn-island[name]"));
-  await Promise.all(
-    placeholders.map(async (el) => {
-      const name = el.getAttribute("name");
-      if (!name) return;
-      const entry = manifest[name];
-      if (!entry) {
-        console.warn(`[hibana] island "${name}" not found in manifest; skipping`);
-        return;
-      }
-      const propsAttr = el.getAttribute("data-props");
-      let props: Record<string, unknown> = {};
-      if (propsAttr) {
-        try {
-          props = JSON.parse(propsAttr) as Record<string, unknown>;
-        } catch (e) {
-          console.warn(`[hibana] island "${name}": invalid data-props JSON, using {}`, e);
-        }
-      }
+  // 再帰的に hydrate: parent island を hydrate すると child placeholder
+  // (<hbn-island name="Counter"/> 等) が新たに DOM に現れる。 一度の querySelectorAll
+  // では拾えないので、 wave 単位で繰り返す。 階層深度 10 で打ち切り (循環 mount 防止)。
+  for (let i = 0; i < 10; i++) {
+    const placeholders = Array.from(document.querySelectorAll<HTMLElement>("hbn-island[name]"));
+    if (placeholders.length === 0) return;
+    await Promise.all(placeholders.map((el) => hydrateOne(el, manifest)));
+  }
+  console.warn("[hibana] mountIslands: hit recursion bound (10 waves); leftover placeholders");
+}
 
-      const url = entry.chunk
-        ? `/${entry.chunk}`
-        : `/@id/__x00__virtual:hibana-island/${encodeURIComponent(name)}`;
+async function hydrateOne(el: HTMLElement, manifest: IslandManifest): Promise<void> {
+  const name = el.getAttribute("name");
+  if (!name) return;
+  const entry = manifest[name];
+  if (!entry) {
+    console.warn(`[hibana] island "${name}" not found in manifest; skipping`);
+    return;
+  }
+  const propsAttr = el.getAttribute("data-props");
+  let props: Record<string, unknown> = {};
+  if (propsAttr) {
+    try {
+      props = JSON.parse(propsAttr) as Record<string, unknown>;
+    } catch (e) {
+      console.warn(`[hibana] island "${name}": invalid data-props JSON, using {}`, e);
+    }
+  }
 
-      try {
-        await import(/* @vite-ignore */ url);
-      } catch (e) {
-        console.error(`[hibana] island "${name}": failed to import ${url}`, e);
-        return;
-      }
-      // chunk は side-effect で globalThis registry に component を登録する
-      // (vite-plugin の virtual module load を参照)。 default export 経路だと
-      // Rolldown の tree-shake で消えるため、 registry 方式に統一。
-      const registry = (globalThis as Record<symbol, Record<string, unknown> | undefined>)[
-        Symbol.for("hibana.islands")
-      ];
-      const Component = registry?.[name];
-      if (typeof Component !== "function") {
-        console.warn(`[hibana] island "${name}": not found in registry after import`);
-        return;
-      }
+  const url = entry.chunk
+    ? `/${entry.chunk}`
+    : `/@id/__x00__virtual:hibana-island/${encodeURIComponent(name)}`;
 
-      // Fragment で wrap して child slot で reactive binding を起動。
-      // component の末尾 thunk は jsx runtime の T9.6 reactive Node-child 経路で
-      // 初回 render + 以降の effect 更新が組まれる。
-      const wrapper = jsx(Fragment, {
-        children: jsx(Component as (p: Record<string, unknown>) => Node, props),
-      });
-      el.replaceWith(wrapper);
-    }),
-  );
+  try {
+    await import(/* @vite-ignore */ url);
+  } catch (e) {
+    console.error(`[hibana] island "${name}": failed to import ${url}`, e);
+    return;
+  }
+  // chunk は side-effect で globalThis registry に component を登録する
+  // (vite-plugin の virtual module load を参照)。 default export 経路だと
+  // Rolldown の tree-shake で消えるため、 registry 方式に統一。
+  const registry = (globalThis as Record<symbol, Record<string, unknown> | undefined>)[
+    Symbol.for("hibana.islands")
+  ];
+  const Component = registry?.[name];
+  if (typeof Component !== "function") {
+    console.warn(`[hibana] island "${name}": not found in registry after import`);
+    return;
+  }
+
+  // Fragment で wrap して child slot で reactive binding を起動。
+  // component の末尾 thunk は jsx runtime の T9.6 reactive Node-child 経路で
+  // 初回 render + 以降の effect 更新が組まれる。
+  const wrapper = jsx(Fragment, {
+    children: jsx(Component as (p: Record<string, unknown>) => Node, props),
+  });
+  el.replaceWith(wrapper);
 }

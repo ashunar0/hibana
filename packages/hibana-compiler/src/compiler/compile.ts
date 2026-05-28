@@ -4,6 +4,7 @@ import _traverse, { type TraverseOptions } from "@babel/traverse";
 import pattern3Plugin from "./plugin.ts";
 import { transformAtBlock } from "./transform-at-block.ts";
 import { transformComponent } from "./transform-component.ts";
+import islandPlugin from "./transform-island.ts";
 
 // Babel パッケージの CJS interop: bundler によっては `.default` 経由でしか取れない
 // (Solid / Vite plugin 等で同じ workaround を採用)。
@@ -24,7 +25,10 @@ const traverse = ((_traverse as any).default ?? _traverse) as typeof _traverse;
  *   2. transform-at-block (string): `@{ expr }` → `(() => expr)` (T16-MVP, 単一 expression)
  *   3. Babel parse + pattern3Plugin: marker 付き function の body 末尾を
  *      ReturnStatement に昇格 (do-block 化) + JSX 内 expression を thunk 化
- *   4. Babel generate: AST → JS string
+ *   4. Babel traverse + islandPlugin: PascalCase JSXElement (`<Counter/>`) を
+ *      `<hbn-island name="Counter" data-props={...}/>` に書き換え、 per-island chunk
+ *      split を成立させる
+ *   5. Babel generate: AST → JS string
  *
  * `(() => expr)` は ArrowFunctionExpression なので plugin の thunkify は二重 wrap しない
  * (shouldThunkify が ArrowFunction を除外する)。 JSX child / attribute として置かれた
@@ -41,6 +45,9 @@ export function compile(source: string): string {
 
   const plugin = pattern3Plugin();
   traverse(ast, plugin.visitor as TraverseOptions);
+
+  const island = islandPlugin();
+  traverse(ast, island.visitor as TraverseOptions);
 
   return generate(ast).code;
 }
