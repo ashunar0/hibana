@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { Plugin, ResolvedConfig } from "vite";
+import { build as viteBuild, type Plugin, type ResolvedConfig } from "vite";
 import { compile } from "../compiler/compile.ts";
 import { extractIslands } from "../extractor/extract-islands.ts";
 
@@ -17,12 +17,16 @@ export function shouldTransform(id: string, code: string): boolean {
  * Islands manifest の 1 エントリ。 build 時に `dist/islands.json` として出力される。
  * - `source`: project root (vite config.root) からの相対 path
  * - `chunk`: build 時に per-island chunk として emit された asset の最終 path。 dev では undefined
+ * - `interactive`: false なら client JS shipping なし (static island、 SSR HTML のみ)
+ * - `reasons`: interactive 判定の根拠 (debug 用、 analyzer の reasons をそのまま transfer)
  */
 export interface ManifestEntry {
   source: string;
   line: number;
   props: string[];
   chunk?: string;
+  interactive: boolean;
+  reasons: string[];
 }
 
 export type IslandManifest = Record<string, ManifestEntry>;
@@ -34,6 +38,10 @@ export interface HibanaPluginOptions {
 
 const VIRTUAL_PREFIX = "virtual:hibana-island/";
 const RESOLVED_PREFIX = `\0${VIRTUAL_PREFIX}`;
+const SERVER_ENTRY_ID = "virtual:hibana-server-entry";
+const RESOLVED_SERVER_ENTRY = `\0${SERVER_ENTRY_ID}`;
+const SERVER_OUT_SUBDIR = ".server";
+const SERVER_BUNDLE_NAME = "server.mjs";
 
 async function walkTsx(dir: string): Promise<string[]> {
   const out: string[] = [];
@@ -63,6 +71,10 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
   let resolvedRoot = process.cwd();
   let outDir = "dist";
   let isBuild = false;
+  // server bundle build (子 vite.build({ ssr: true }) で起動された 2 回目の pass) か。
+  // closeBundle の SSR 焼き込み起動を skip して再帰を止める。 また client build 専用の
+  // 動作 (per-island chunk emit / manifest 出力) も skip する。
+  let isSsrBuild = false;
 
   return {
     name: "hibana",
@@ -71,6 +83,7 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
       resolvedRoot = config.root;
       outDir = path.resolve(config.root, config.build.outDir);
       isBuild = config.command === "build";
+      isSsrBuild = isBuild && Boolean(config.build.ssr);
     },
     async buildStart() {
       // dev / build 両方で project root を fs scan し、 全 island を manifest に populate する。
@@ -105,10 +118,15 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
             source: relSource,
             line: island.line,
             props: island.props,
+            interactive: island.interactive,
+            reasons: island.reasons,
           };
           islandAbsPath[island.name] = absFile;
 
-          if (isBuild) {
+          // chunk emit は client build かつ interactive island のみ:
+          // - server build (ssr: true) は virtual:hibana-server-entry が単一 bundle 化、 個別 chunk 不要
+          // - static island は client JS shipping なし、 SSR HTML のみで完結
+          if (isBuild && !isSsrBuild && island.interactive) {
             const refId = this.emitFile({
               type: "chunk",
               id: `${VIRTUAL_PREFIX}${island.name}`,
@@ -133,11 +151,27 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
       });
     },
     resolveId(id) {
+      if (id === SERVER_ENTRY_ID) return RESOLVED_SERVER_ENTRY;
       if (id.startsWith(VIRTUAL_PREFIX)) {
         return `\0${id}`;
       }
     },
     load(id) {
+      // server build entry: 全 island (interactive + static) を import + registry 登録する
+      // 1 ファイル。 子 vite.build({ ssr: true }) の input として使われる。
+      if (id === RESOLVED_SERVER_ENTRY) {
+        const names = Object.keys(islandAbsPath);
+        const lines: string[] = [];
+        for (const name of names) {
+          lines.push(`import { ${name} } from ${JSON.stringify(islandAbsPath[name])};`);
+        }
+        lines.push('const __hbnReg = (globalThis[Symbol.for("hibana.islands")] ??= {});');
+        for (const name of names) {
+          lines.push(`__hbnReg[${JSON.stringify(name)}] = ${name};`);
+        }
+        return { code: `${lines.join("\n")}\n`, moduleSideEffects: "no-treeshake" };
+      }
+
       if (!id.startsWith(RESOLVED_PREFIX)) return;
       const name = id.slice(RESOLVED_PREFIX.length);
       const absPath = islandAbsPath[name];
@@ -171,7 +205,10 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
       }
     },
     generateBundle() {
-      // build 時のみ chunk path を書き戻す。 dev では generateBundle 自体が呼ばれない
+      // build 時のみ chunk path を書き戻す。 dev では generateBundle 自体が呼ばれない。
+      // server build 側では client manifest を上書きしないように skip (= 子 build は client
+      // chunk を持たず、 server bundle 経由でしか component を呼ばないため manifest 不要)。
+      if (isSsrBuild) return;
       for (const [name, refId] of chunkRefs) {
         const entry = manifest[name];
         if (!entry) continue;
@@ -184,23 +221,47 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
       });
     },
     async closeBundle() {
-      // SSR (Server-Side Rendering): build 完了後、 dist の per-island chunk を Node 上で
-      // 実行して initial HTML を生成し、 dist/index.html の `<hbn-island name="X">` 中身に
-      // 埋め込む。 これにより JS load 前から initial paint で content が見える。
+      // dual bundle SSR: build 完了後、
+      //   1. 子 vite.build({ ssr: true }) を起動して、 全 island を集約した server bundle
+      //      (`dist/.server/server.mjs`) を作る。 これは Node target / ESM / source-as-is
+      //      で、 client bundle に含まれない static island も渡って来る。 Phase 3 で
+      //      per-request SSR (Hono integration) するときに再利用するため build 後も残す。
+      //   2. happy-dom で document 等を install
+      //   3. server bundle を file:// 1 回 import → 副作用で
+      //      globalThis[Symbol.for("hibana.islands")] に全 island (interactive + static) が登録
+      //   4. dist/index.html の `<hbn-island name="X">` placeholder を見つけて Component
+      //      を呼び、 outerHTML を中身に注入。 内部の `<hbn-island/>` も再帰的に同処理
+      //   5. index.html を書き戻す
       //
-      // 流れ:
-      //   1. happy-dom で globalThis.document 等を install (hibana-core の jsx runtime が
-      //      document.createElement を呼ぶ前提なので、 Node 環境では DOM emulation が必要)
-      //   2. dist/assets/island-*.js を file:// import → 副作用で
-      //      globalThis[Symbol.for("hibana.islands")] に component が登録される
-      //   3. index.html を読み、 `<hbn-island name="X"></hbn-island>` placeholder を見つけて
-      //      Component を呼んで outerHTML を中身に注入。 内部の `<hbn-island/>` も再帰的に
-      //      data-props を decode して同じ処理 → 全 island 中身埋まる
-      //   4. index.html を書き戻す
-      //
-      // dev では closeBundle が呼ばれないため SSR は skip (`vp dev` は SPA-like)。
+      // 子 build の plugin (isSsrBuild=true) は closeBundle / chunk emit / manifest emit を
+      // 全部 skip するので再帰しない。 dev では closeBundle 自体が呼ばれないため SSR skip。
       if (!isBuild) return;
+      if (isSsrBuild) return;
       if (Object.keys(manifest).length === 0) return;
+
+      // 1. server bundle を子 invocation で build
+      const ssrOutDir = path.resolve(outDir, SERVER_OUT_SUBDIR);
+      try {
+        await viteBuild({
+          root: resolvedRoot,
+          configFile: false,
+          plugins: [hibana(options)],
+          logLevel: "warn",
+          build: {
+            ssr: true,
+            outDir: ssrOutDir,
+            emptyOutDir: true,
+            rollupOptions: {
+              input: SERVER_ENTRY_ID,
+              output: { format: "esm", entryFileNames: SERVER_BUNDLE_NAME },
+            },
+          },
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.warn(`[hibana] SSR build failed: ${msg}`);
+        return;
+      }
 
       const { Window } = await import("happy-dom");
       const win = new Window();
@@ -227,15 +288,16 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
       g[islandSym] = {};
 
       try {
-        for (const entry of Object.values(manifest)) {
-          if (!entry.chunk) continue;
-          const chunkPath = path.resolve(outDir, entry.chunk);
-          try {
-            await import(pathToFileURL(chunkPath).href);
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            this.warn(`[hibana] SSR: failed to import ${entry.chunk}: ${msg}`);
-          }
+        // 2. server bundle を 1 回 import (静的 import 文経由で全 island が registry 登録)
+        const serverBundlePath = path.join(ssrOutDir, SERVER_BUNDLE_NAME);
+        // cache bust: 同一プロセス内で再 build した場合の ESM module キャッシュ回避
+        const importUrl = `${pathToFileURL(serverBundlePath).href}?t=${Date.now()}`;
+        try {
+          await import(importUrl);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          this.warn(`[hibana] SSR: failed to import server bundle: ${msg}`);
+          return;
         }
 
         const registry = (g[islandSym] ?? {}) as Record<string, unknown>;

@@ -1,12 +1,16 @@
 // Island mount loader: `<hbn-island name="Foo" data-props="...">` を全部探して、
 // manifest (`/islands.json`) から chunk URL を引いて dynamic import → component を mount。
 //
-// 2 つの mount path:
-//   - SSR 済み (build 時 closeBundle で焼き込まれた、 `el.firstElementChild` あり):
+// 4 つの分岐 (interactive × SSR 済の組み合わせ):
+//   - interactive + SSR 済 (build 時 closeBundle で焼き込まれた、 `el.firstElementChild` あり):
 //     hydrateInto で hydrate モード起動 → 既存 DOM tree に event handler と signal binding
 //     effect だけ attach、 DOM churn / flicker なし (design.md §9 Solid 流)
-//   - 非 SSR (dev / 空 placeholder): 従来通り Fragment で wrap → `el.replaceWith(wrapper)`
+//   - interactive + 非 SSR (dev / 空 placeholder): 従来通り Fragment で wrap → `el.replaceWith(wrapper)`
 //     で再 render
+//   - static + SSR 済: mount 不要、 SSR HTML を放置して JS 0 byte shipping。 `data-hydrated`
+//     を立てるだけで wave loop から除外する
+//   - static + 非 SSR (dev): client で 1 回 render する fallback (dev では SSR されないので
+//     何か出さないと空白になる)
 //
 // hydrate 済の `<hbn-island>` には `data-hydrated` 属性を立てて再 hydrate を防ぐ
 // (hydrate モードでは `<hbn-island>` 自体が DOM に残るため、 querySelectorAll が
@@ -23,6 +27,8 @@ interface IslandManifestEntry {
   line: number;
   props: string[];
   chunk?: string;
+  interactive?: boolean;
+  reasons?: string[];
 }
 
 type IslandManifest = Record<string, IslandManifestEntry>;
@@ -79,6 +85,13 @@ async function hydrateOne(el: HTMLElement, manifest: IslandManifest): Promise<vo
     } catch (e) {
       console.warn(`[hibana] island "${name}": invalid data-props JSON, using {}`, e);
     }
+  }
+
+  // static + SSR 済: SSR HTML を放置、 client JS shipping ゼロ。 wave loop から除外する
+  // ために `data-hydrated` だけ立てて return (dynamic import 自体させない)。
+  if (entry.interactive === false && el.firstElementChild) {
+    el.setAttribute("data-hydrated", "");
+    return;
   }
 
   const url = entry.chunk
