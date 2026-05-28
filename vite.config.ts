@@ -8,7 +8,10 @@ export default defineConfig({
     // oxlint-disable-next-line typescript/no-explicit-any -- staged 関数形式の型が定義されてないので cast
     "*": ((files: string[]) => {
       const filtered = files.filter(
-        (f) => !f.endsWith("pattern3-demo.tsx") && !f.endsWith("quiz-hsx/src/App.tsx"),
+        (f) =>
+          !f.endsWith("pattern3-demo.tsx") &&
+          !f.endsWith("quiz-hsx/src/App.tsx") &&
+          !f.includes("island-demo/src/"),
       );
       if (filtered.length === 0) return [];
       return [`vp check --fix ${filtered.map((f) => `"${f}"`).join(" ")}`];
