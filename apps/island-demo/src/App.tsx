@@ -4,12 +4,10 @@
 import { Counter } from "./components/Counter.tsx";
 import { Greeting } from "./components/Greeting.tsx";
 
-component App() {
+export component App() {
   <main>
     <h1>Hibana Island Demo</h1>
     <Greeting name="あさひ" />
     <Counter />
   </main>
 }
-
-export { App };

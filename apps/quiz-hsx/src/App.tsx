@@ -69,12 +69,10 @@ component Result() {
   </div>
 }
 
-component App() {
+export component App() {
   <div>
     @{ if (step.value === 0) <Intro />
        else if (step.value === TOTAL_STEPS - 1) <Result />
        else <QuestionView index={step.value - 1} /> }
   </div>
 }
-
-export { App };
