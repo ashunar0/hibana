@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { jsx } from "hibana-core/jsx-runtime";
+import { registerIsland } from "hibana-compiler/ssr";
 import { expect, test } from "vite-plus/test";
 import { hibana } from "../src/server.ts";
 
@@ -55,6 +56,46 @@ test("options override clientEntry / manifestPath / lang", async () => {
   expect(html).toContain('<html lang="ja">');
   expect(html).toContain('src="/build/entry.js"');
   expect(html).toContain('href="/build/islands.json"');
+});
+
+test("self が <hbn-island name> なら registry の component を呼んで innerHTML を埋める", async () => {
+  registerIsland("TestHello", () => jsx("p", { children: "hello from island" }));
+  const app = createApp();
+  const island = jsx("hbn-island", { name: "TestHello", "data-props": "{}" });
+  app.get("/", (c) => c.render(island));
+
+  const html = await (await app.request("/")).text();
+  expect(html).toContain(
+    '<hbn-island name="TestHello" data-props="{}"><p>hello from island</p></hbn-island>',
+  );
+});
+
+test("descendant <hbn-island name> も registry 経由で埋める + data-props を JSON parse", async () => {
+  registerIsland("TestGreet", (props) =>
+    jsx("p", { children: `Hi, ${(props as { name: string }).name}!` }),
+  );
+  const app = createApp();
+  const page = jsx("main", {
+    children: jsx("hbn-island", {
+      name: "TestGreet",
+      "data-props": '{"name":"あさひ"}',
+    }),
+  });
+  app.get("/", (c) => c.render(page));
+
+  const html = await (await app.request("/")).text();
+  expect(html).toContain(
+    '<main><hbn-island name="TestGreet" data-props="{&quot;name&quot;:&quot;あさひ&quot;}"><p>Hi, あさひ!</p></hbn-island></main>',
+  );
+});
+
+test("registry にない island name は空のまま (= silent skip)", async () => {
+  const app = createApp();
+  const island = jsx("hbn-island", { name: "NotRegistered", "data-props": "{}" });
+  app.get("/", (c) => c.render(island));
+
+  const html = await (await app.request("/")).text();
+  expect(html).toContain('<hbn-island name="NotRegistered" data-props="{}"></hbn-island>');
 });
 
 test("nested element produces correct outerHTML", async () => {

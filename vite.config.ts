@@ -11,7 +11,8 @@ export default defineConfig({
         (f) =>
           !f.endsWith("pattern3-demo.tsx") &&
           !f.endsWith("quiz-hsx/src/App.tsx") &&
-          !f.includes("island-demo/src/"),
+          !f.includes("island-demo/src/") &&
+          !f.includes("fullstack-demo/src/"),
       );
       if (filtered.length === 0) return [];
       return [`vp check --fix ${filtered.map((f) => `"${f}"`).join(" ")}`];

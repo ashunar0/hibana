@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from "hono";
-import { ensureDom } from "hibana-compiler/ssr";
+import { ensureDom, loadServerBundle, renderIsland } from "hibana-compiler/ssr";
 
 declare module "hono" {
   interface ContextRenderer {
@@ -14,7 +14,7 @@ export interface HibanaMiddlewareOptions {
   manifestPath?: string;
   /** <html lang="..."> */
   lang?: string;
-  /** server bundle (`dist/.server/server.mjs`) の path — Phase 3 で renderIsland 経由 per-request SSR に使う */
+  /** server bundle (`dist/.server/server.mjs`) の path — 渡すと middleware 構築時に 1 度 import して island registry を準備する */
   serverBundlePath?: string;
 }
 
@@ -37,19 +37,68 @@ function renderHtml(
   );
 }
 
+function safeJsonParse(s: string): Record<string, unknown> {
+  try {
+    return JSON.parse(s) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+interface SsrElement {
+  tagName?: string;
+  outerHTML?: string;
+  innerHTML?: string;
+  getAttribute?: (name: string) => string | null;
+  querySelectorAll?: (selector: string) => Iterable<unknown>;
+}
+
+function fillIslands(content: Node | string): string {
+  if (typeof content === "string") return content;
+  const el = content as unknown as SsrElement;
+
+  const tag = typeof el.tagName === "string" ? el.tagName.toLowerCase() : "";
+  if (tag === "hbn-island") {
+    const name = el.getAttribute?.("name") ?? null;
+    if (name) {
+      const propsStr = el.getAttribute?.("data-props") ?? null;
+      const props = propsStr ? safeJsonParse(propsStr) : {};
+      el.innerHTML = renderIsland(name, props);
+    }
+    return el.outerHTML ?? "";
+  }
+
+  if (el.querySelectorAll) {
+    for (const ph of Array.from(el.querySelectorAll("hbn-island[name]"))) {
+      const ce = ph as SsrElement;
+      const childName = ce.getAttribute?.("name") ?? null;
+      if (!childName) continue;
+      const propsStr = ce.getAttribute?.("data-props") ?? null;
+      const childProps = propsStr ? safeJsonParse(propsStr) : {};
+      ce.innerHTML = renderIsland(childName, childProps);
+    }
+  }
+  return el.outerHTML ?? "";
+}
+
 export function hibana(options: HibanaMiddlewareOptions = {}): MiddlewareHandler {
   const resolved = {
     clientEntry: options.clientEntry ?? "/assets/main.js",
     manifestPath: options.manifestPath ?? "/islands.json",
     lang: options.lang ?? "en",
   };
-  return async (c, next) => {
+
+  const initPromise = (async () => {
     await ensureDom();
+    if (options.serverBundlePath) {
+      await loadServerBundle(options.serverBundlePath);
+    }
+  })();
+
+  return async (c, next) => {
+    await initPromise;
     c.setRenderer((content) => {
-      const inner =
-        typeof content === "string"
-          ? content
-          : ((content as unknown as { outerHTML?: string }).outerHTML ?? "");
+      const inner = fillIslands(content);
       return c.html(renderHtml(inner, resolved));
     });
     await next();
