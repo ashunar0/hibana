@@ -29,6 +29,9 @@
     "release": "bumpp",
     "prepublishOnly": "pnpm run build"
   },
+  "dependencies": {
+    "happy-dom": "catalog:"
+  },
   "devDependencies": {
     "@babel/generator": "catalog:",
     "@babel/parser": "catalog:",

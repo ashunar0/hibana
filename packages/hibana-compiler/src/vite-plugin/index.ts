@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import type { Plugin, ResolvedConfig } from "vite";
 import { compile } from "../compiler/compile.ts";
 import { extractIslands } from "../extractor/extract-islands.ts";
@@ -60,6 +61,7 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
   const chunkRefs = new Map<string, string>();
   const manifestFileName = options.manifestFileName ?? "islands.json";
   let resolvedRoot = process.cwd();
+  let outDir = "dist";
   let isBuild = false;
 
   return {
@@ -67,6 +69,7 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
     enforce: "pre",
     configResolved(config: ResolvedConfig) {
       resolvedRoot = config.root;
+      outDir = path.resolve(config.root, config.build.outDir);
       isBuild = config.command === "build";
     },
     async buildStart() {
@@ -180,5 +183,145 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
         source: `${JSON.stringify(manifest, null, 2)}\n`,
       });
     },
+    async closeBundle() {
+      // SSR (Server-Side Rendering): build 完了後、 dist の per-island chunk を Node 上で
+      // 実行して initial HTML を生成し、 dist/index.html の `<hbn-island name="X">` 中身に
+      // 埋め込む。 これにより JS load 前から initial paint で content が見える。
+      //
+      // 流れ:
+      //   1. happy-dom で globalThis.document 等を install (hibana-core の jsx runtime が
+      //      document.createElement を呼ぶ前提なので、 Node 環境では DOM emulation が必要)
+      //   2. dist/assets/island-*.js を file:// import → 副作用で
+      //      globalThis[Symbol.for("hibana.islands")] に component が登録される
+      //   3. index.html を読み、 `<hbn-island name="X"></hbn-island>` placeholder を見つけて
+      //      Component を呼んで outerHTML を中身に注入。 内部の `<hbn-island/>` も再帰的に
+      //      data-props を decode して同じ処理 → 全 island 中身埋まる
+      //   4. index.html を書き戻す
+      //
+      // dev では closeBundle が呼ばれないため SSR は skip (`vp dev` は SPA-like)。
+      if (!isBuild) return;
+      if (Object.keys(manifest).length === 0) return;
+
+      const { Window } = await import("happy-dom");
+      const win = new Window();
+      const g = globalThis as Record<string | symbol, unknown>;
+      const dom = win as unknown as Record<string, unknown>;
+      const prev: Record<string, unknown> = {};
+      const installKeys = [
+        "window",
+        "document",
+        "HTMLElement",
+        "Element",
+        "Node",
+        "Text",
+        "DocumentFragment",
+        "NodeFilter",
+      ];
+      for (const k of installKeys) {
+        prev[k] = g[k];
+        g[k] = k === "window" ? win : k === "document" ? win.document : dom[k];
+      }
+      const islandSym = Symbol.for("hibana.islands");
+      const prevRegistry = g[islandSym];
+      // 前回 build / dev session の残骸を避けて空 registry から始める
+      g[islandSym] = {};
+
+      try {
+        for (const entry of Object.values(manifest)) {
+          if (!entry.chunk) continue;
+          const chunkPath = path.resolve(outDir, entry.chunk);
+          try {
+            await import(pathToFileURL(chunkPath).href);
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            this.warn(`[hibana] SSR: failed to import ${entry.chunk}: ${msg}`);
+          }
+        }
+
+        const registry = (g[islandSym] ?? {}) as Record<string, unknown>;
+
+        function ssrRender(name: string, props: Record<string, unknown>, depth: number): string {
+          if (depth > 10) return ""; // 循環 island 参照の安全弁
+          const Component = registry[name] as ((p: Record<string, unknown>) => unknown) | undefined;
+          if (typeof Component !== "function") return "";
+          let root: unknown;
+          try {
+            root = Component(props);
+          } catch {
+            return "";
+          }
+          // happy-dom の Element を期待
+          const el = root as {
+            querySelectorAll?: (s: string) => Iterable<Element>;
+            outerHTML?: string;
+          };
+          if (el.querySelectorAll) {
+            for (const ph of Array.from(el.querySelectorAll("hbn-island[name]"))) {
+              const childName = ph.getAttribute("name");
+              if (!childName) continue;
+              const propsStr = ph.getAttribute("data-props");
+              const childProps = propsStr ? safeJsonParse(propsStr) : {};
+              ph.innerHTML = ssrRender(childName, childProps, depth + 1);
+            }
+          }
+          return el.outerHTML ?? "";
+        }
+
+        const indexPath = path.resolve(outDir, "index.html");
+        let indexHtml: string;
+        try {
+          indexHtml = await fs.readFile(indexPath, "utf8");
+        } catch {
+          this.warn(`[hibana] SSR: index.html not found at ${indexPath}; skipping`);
+          return;
+        }
+
+        // `<hbn-island name="X" ...></hbn-island>` パターンを再帰 render の結果で埋める。
+        // self-closing 形 (`<hbn-island name="X"/>`) は HTML parser が open/close に展開する
+        // のが普通だが、 念のため両形式に対応する。
+        indexHtml = indexHtml.replace(
+          /<hbn-island\b([^>]*?)\s*(?:\/>|>\s*<\/hbn-island>)/g,
+          (match, attrs: string) => {
+            const nameMatch = /\bname=["']([^"']+)["']/.exec(attrs);
+            if (!nameMatch?.[1]) return match;
+            const name = nameMatch[1];
+            const propsMatch = /\bdata-props=["']([^"']*)["']/.exec(attrs);
+            let props: Record<string, unknown> = {};
+            if (propsMatch?.[1]) {
+              const decoded = decodeHtmlAttr(propsMatch[1]);
+              props = safeJsonParse(decoded);
+            }
+            const html = ssrRender(name, props, 0);
+            return `<hbn-island${attrs}>${html}</hbn-island>`;
+          },
+        );
+
+        await fs.writeFile(indexPath, indexHtml);
+      } finally {
+        for (const k of installKeys) {
+          if (prev[k] === undefined) delete g[k];
+          else g[k] = prev[k];
+        }
+        if (prevRegistry === undefined) delete g[islandSym];
+        else g[islandSym] = prevRegistry;
+      }
+    },
   };
+}
+
+function safeJsonParse(s: string): Record<string, unknown> {
+  try {
+    return JSON.parse(s) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function decodeHtmlAttr(s: string): string {
+  return s
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
 }
