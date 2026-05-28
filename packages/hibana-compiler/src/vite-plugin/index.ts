@@ -1,9 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { build as viteBuild, type Plugin, type ResolvedConfig } from "vite";
 import { compile } from "../compiler/compile.ts";
 import { extractIslands } from "../extractor/extract-islands.ts";
+import { loadServerBundle, renderIsland, withSsrContext } from "../ssr/index.ts";
 
 /** ファイルが Pattern 3 syntax を含むかの短絡判定。 含まないなら transform skip。 */
 export function shouldTransform(id: string, code: string): boolean {
@@ -263,70 +263,17 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
         return;
       }
 
-      const { Window } = await import("happy-dom");
-      const win = new Window();
-      const g = globalThis as Record<string | symbol, unknown>;
-      const dom = win as unknown as Record<string, unknown>;
-      const prev: Record<string, unknown> = {};
-      const installKeys = [
-        "window",
-        "document",
-        "HTMLElement",
-        "Element",
-        "Node",
-        "Text",
-        "DocumentFragment",
-        "NodeFilter",
-      ];
-      for (const k of installKeys) {
-        prev[k] = g[k];
-        g[k] = k === "window" ? win : k === "document" ? win.document : dom[k];
-      }
-      const islandSym = Symbol.for("hibana.islands");
-      const prevRegistry = g[islandSym];
-      // 前回 build / dev session の残骸を避けて空 registry から始める
-      g[islandSym] = {};
-
-      try {
-        // 2. server bundle を 1 回 import (静的 import 文経由で全 island が registry 登録)
+      // 2. SSR 焼き込みは ssr module の withSsrContext + loadServerBundle + renderIsland
+      //    で完結。 build process 専用 (= short-scope)、 finally で DOM / registry を restore。
+      const warn = (msg: string) => this.warn(msg);
+      await withSsrContext(async () => {
         const serverBundlePath = path.join(ssrOutDir, SERVER_BUNDLE_NAME);
-        // cache bust: 同一プロセス内で再 build した場合の ESM module キャッシュ回避
-        const importUrl = `${pathToFileURL(serverBundlePath).href}?t=${Date.now()}`;
         try {
-          await import(importUrl);
+          await loadServerBundle(serverBundlePath, { cacheBust: true });
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
-          this.warn(`[hibana] SSR: failed to import server bundle: ${msg}`);
+          warn(`[hibana] SSR: failed to import server bundle: ${msg}`);
           return;
-        }
-
-        const registry = (g[islandSym] ?? {}) as Record<string, unknown>;
-
-        function ssrRender(name: string, props: Record<string, unknown>, depth: number): string {
-          if (depth > 10) return ""; // 循環 island 参照の安全弁
-          const Component = registry[name] as ((p: Record<string, unknown>) => unknown) | undefined;
-          if (typeof Component !== "function") return "";
-          let root: unknown;
-          try {
-            root = Component(props);
-          } catch {
-            return "";
-          }
-          // happy-dom の Element を期待
-          const el = root as {
-            querySelectorAll?: (s: string) => Iterable<Element>;
-            outerHTML?: string;
-          };
-          if (el.querySelectorAll) {
-            for (const ph of Array.from(el.querySelectorAll("hbn-island[name]"))) {
-              const childName = ph.getAttribute("name");
-              if (!childName) continue;
-              const propsStr = ph.getAttribute("data-props");
-              const childProps = propsStr ? safeJsonParse(propsStr) : {};
-              ph.innerHTML = ssrRender(childName, childProps, depth + 1);
-            }
-          }
-          return el.outerHTML ?? "";
         }
 
         const indexPath = path.resolve(outDir, "index.html");
@@ -334,11 +281,11 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
         try {
           indexHtml = await fs.readFile(indexPath, "utf8");
         } catch {
-          this.warn(`[hibana] SSR: index.html not found at ${indexPath}; skipping`);
+          warn(`[hibana] SSR: index.html not found at ${indexPath}; skipping`);
           return;
         }
 
-        // `<hbn-island name="X" ...></hbn-island>` パターンを再帰 render の結果で埋める。
+        // `<hbn-island name="X" ...></hbn-island>` パターンを renderIsland の結果で埋める。
         // self-closing 形 (`<hbn-island name="X"/>`) は HTML parser が open/close に展開する
         // のが普通だが、 念のため両形式に対応する。
         indexHtml = indexHtml.replace(
@@ -353,20 +300,13 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
               const decoded = decodeHtmlAttr(propsMatch[1]);
               props = safeJsonParse(decoded);
             }
-            const html = ssrRender(name, props, 0);
+            const html = renderIsland(name, props);
             return `<hbn-island${attrs}>${html}</hbn-island>`;
           },
         );
 
         await fs.writeFile(indexPath, indexHtml);
-      } finally {
-        for (const k of installKeys) {
-          if (prev[k] === undefined) delete g[k];
-          else g[k] = prev[k];
-        }
-        if (prevRegistry === undefined) delete g[islandSym];
-        else g[islandSym] = prevRegistry;
-      }
+      });
     },
   };
 }
