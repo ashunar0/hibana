@@ -17,18 +17,24 @@ export function listTodos(): Todo[] {
   return todos.map((t) => ({ ...t }));
 }
 
-export function addTodo(text: string): void {
+export function addTodo(text: string): Todo | null {
   const trimmed = text.trim();
-  if (!trimmed) return;
-  todos.push({ id: nextId++, text: trimmed, done: false });
+  if (!trimmed) return null;
+  const todo: Todo = { id: nextId++, text: trimmed, done: false };
+  todos.push(todo);
+  return { ...todo };
 }
 
-export function toggleTodo(id: number): void {
+export function toggleTodo(id: number): Todo | null {
   const t = todos.find((x) => x.id === id);
-  if (t) t.done = !t.done;
+  if (!t) return null;
+  t.done = !t.done;
+  return { ...t };
 }
 
-export function deleteTodo(id: number): void {
+export function deleteTodo(id: number): boolean {
   const idx = todos.findIndex((x) => x.id === id);
-  if (idx >= 0) todos.splice(idx, 1);
+  if (idx < 0) return false;
+  todos.splice(idx, 1);
+  return true;
 }

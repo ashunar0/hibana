@@ -49,16 +49,30 @@ test("boolean shorthand (`<X flag/>`) は data-props.flag = true として seria
   expect(out).toContain('data-props={"{\\"flag\\":true}"}');
 });
 
-test("dynamic attribute (signal access 等) は data-props に入らず drop される", () => {
-  const src = `component App() {
-  const sig = new Signal(0);
-  <main><Counter dyn={sig.value} stat="ok"/></main>;
+test("dynamic attribute は ObjectExpression + JSON.stringify wrap で runtime serialize される", () => {
+  const src = `component App(props) {
+  <main><TodoList initialTodos={props.todos}/></main>;
 }`;
   const out = compile(src);
-  // dyn は drop、 stat のみ serialize
-  expect(out).toContain('name="Counter"');
-  expect(out).toContain('data-props={"{\\"stat\\":\\"ok\\"}"}');
-  expect(out).not.toContain("dyn=");
+  expect(out).toContain('name="TodoList"');
+  // runtime JSON.stringify({...}) で wrap、 props.todos は parent render 時に評価
+  expect(out).toContain("data-props={JSON.stringify(");
+  expect(out).toContain('"initialTodos"');
+  expect(out).toContain("props.todos");
+});
+
+test("static + dynamic mixed の場合も ObjectExpression に両方含めて wrap される", () => {
+  const src = `component App(props) {
+  <main><X dyn={props.x} stat="ok" num={42}/></main>;
+}`;
+  const out = compile(src);
+  expect(out).toContain("data-props={JSON.stringify(");
+  expect(out).toContain('"dyn"');
+  expect(out).toContain("props.x");
+  expect(out).toContain('"stat"');
+  expect(out).toContain('"ok"');
+  expect(out).toContain('"num"');
+  expect(out).toContain("42");
 });
 
 test("intrinsic tag (lowercase) は触らない", () => {
