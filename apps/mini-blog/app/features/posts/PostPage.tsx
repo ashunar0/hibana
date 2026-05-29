@@ -1,5 +1,9 @@
 // @ts-nocheck
-// /posts/[slug] page。 server から find した post 1 件を受けて render。
+// /posts/[slug] page。 server から find した post 1 件 + 現在の likes を受けて render。
+// PostPage 自体は signal を持たないので static (= 親 page entry)。
+// LikeButton だけが interactive 判定で per-island chunk になる。
+import { LikeButton } from "./LikeButton.tsx";
+
 export component PostPage(props) {
   <article>
     <header class="mb-6">
@@ -11,6 +15,7 @@ export component PostPage(props) {
         <p>{para}</p>
       } }
     </div>
+    <LikeButton slug={props.post.slug} initialCount={props.likes} />
     <p class="mt-8">
       <a href="/" class="text-sm text-blue-600 dark:text-blue-400 hover:underline">← home</a>
     </p>
