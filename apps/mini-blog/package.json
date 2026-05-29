@@ -1,0 +1,27 @@
+{
+  "name": "mini-blog",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vp build",
+    "start": "tsx server.ts",
+    "serve": "pnpm build && pnpm start"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.0",
+    "@tailwindcss/vite": "catalog:",
+    "hibana": "workspace:*",
+    "hibana-compiler": "workspace:*",
+    "hibana-core": "workspace:*",
+    "hono": "^4",
+    "tailwindcss": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "^4.19.0",
+    "typescript": "~6.0.2",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

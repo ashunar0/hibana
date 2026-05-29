@@ -95,6 +95,38 @@ test("setupHibana: c.render middleware も install (Renderer 経由で HTML temp
   expect(html).toContain("<p>home</p>");
 });
 
+test('setupHibana: cssEntries option で <link rel="stylesheet"> を head に inject', async () => {
+  registerRoute("/", {
+    default: (c: { render: (s: string) => Response }) => c.render("<p>home</p>"),
+  });
+
+  const app = new Hono();
+  await setupHibana(app, {
+    cssEntries: ["/assets/index.css", "/assets/extra.css"],
+  });
+
+  const html = await (await app.request("/")).text();
+  expect(html).toContain('<link rel="stylesheet" href="/assets/index.css">');
+  expect(html).toContain('<link rel="stylesheet" href="/assets/extra.css">');
+  // body の前 (= head 内) に来てることを ordering で確認
+  const linkIdx = html.indexOf('<link rel="stylesheet" href="/assets/index.css">');
+  const bodyIdx = html.indexOf("<body>");
+  expect(linkIdx).toBeGreaterThan(0);
+  expect(linkIdx).toBeLessThan(bodyIdx);
+});
+
+test('setupHibana: cssEntries 未指定なら <link rel="stylesheet"> は emit されない', async () => {
+  registerRoute("/", {
+    default: (c: { render: (s: string) => Response }) => c.render("<p>home</p>"),
+  });
+
+  const app = new Hono();
+  await setupHibana(app);
+
+  const html = await (await app.request("/")).text();
+  expect(html).not.toContain('rel="stylesheet"');
+});
+
 test("setupHibana: _middleware を mountPath で配線", async () => {
   let seen = "";
   registerMiddleware("/admin/*", {

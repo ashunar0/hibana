@@ -13,7 +13,9 @@ export default defineConfig({
           !f.endsWith("quiz-hsx/src/App.tsx") &&
           !f.includes("island-demo/src/") &&
           !f.includes("fullstack-demo/src/") &&
-          !f.includes("fullstack-demo/app/"),
+          !f.includes("fullstack-demo/app/") &&
+          !f.includes("mini-blog/src/") &&
+          !f.includes("mini-blog/app/"),
       );
       if (filtered.length === 0) return [];
       return [`vp check --fix ${filtered.map((f) => `"${f}"`).join(" ")}`];

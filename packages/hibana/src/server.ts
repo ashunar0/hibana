@@ -16,12 +16,17 @@ export interface HibanaMiddlewareOptions {
   lang?: string;
   /** server bundle (`dist/.server/server.mjs`) の path — 渡すと middleware 構築時に 1 度 import して island registry を準備する */
   serverBundlePath?: string;
+  /** head に <link rel="stylesheet"> として inject する CSS entry の URL 配列 (例: `["/assets/index.css"]`) */
+  cssEntries?: string[];
 }
 
 function renderHtml(
   inner: string,
-  opts: Required<Pick<HibanaMiddlewareOptions, "clientEntry" | "manifestPath" | "lang">>,
+  opts: Required<
+    Pick<HibanaMiddlewareOptions, "clientEntry" | "manifestPath" | "lang" | "cssEntries">
+  >,
 ): string {
+  const cssLinks = opts.cssEntries.map((href) => `<link rel="stylesheet" href="${href}">`).join("");
   return (
     `<!doctype html>` +
     `<html lang="${opts.lang}">` +
@@ -30,6 +35,7 @@ function renderHtml(
     `<meta name="viewport" content="width=device-width, initial-scale=1">` +
     `<link rel="modulepreload" href="${opts.clientEntry}">` +
     `<link rel="preload" href="${opts.manifestPath}" as="fetch" crossorigin>` +
+    cssLinks +
     `<script type="module" src="${opts.clientEntry}"></script>` +
     `</head>` +
     `<body>${inner}</body>` +
@@ -86,6 +92,7 @@ export function hibana(options: HibanaMiddlewareOptions = {}): MiddlewareHandler
     clientEntry: options.clientEntry ?? "/assets/main.js",
     manifestPath: options.manifestPath ?? "/islands.json",
     lang: options.lang ?? "en",
+    cssEntries: options.cssEntries ?? [],
   };
 
   const initPromise = (async () => {
