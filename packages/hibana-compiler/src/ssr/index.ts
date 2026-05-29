@@ -12,9 +12,35 @@ const DOM_KEYS = [
 ] as const;
 
 const ISLAND_SYMBOL = Symbol.for("hibana.islands");
+const ROUTE_SYMBOL = Symbol.for("hibana.routes");
 
 type IslandComponent = (props: Record<string, unknown>) => unknown;
 type IslandRegistry = Record<string, IslandComponent>;
+
+export type RouteMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD";
+
+/** Hono Handler の配列 (hibana-compiler は中身を見ない、 hibana 側が信じて配線する) */
+export type RouteHandlers = unknown[];
+
+/** routes module の shape: `export default` = GET (省略時)、 named export = method */
+export interface RouteModule {
+  default?: unknown;
+  GET?: unknown;
+  POST?: unknown;
+  PUT?: unknown;
+  PATCH?: unknown;
+  DELETE?: unknown;
+  OPTIONS?: unknown;
+  HEAD?: unknown;
+}
+
+export interface RegisteredRoute {
+  /** Hono path pattern (例: "/blog/:slug") */
+  path: string;
+  methods: Partial<Record<RouteMethod, RouteHandlers>>;
+}
+
+const ROUTE_METHODS: RouteMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"];
 
 let domInstalled = false;
 
@@ -47,6 +73,71 @@ function getRegistry(): IslandRegistry {
 
 export function registerIsland(name: string, Component: IslandComponent): void {
   getRegistry()[name] = Component;
+}
+
+interface RawRouteEntry {
+  path: string;
+  module: RouteModule;
+}
+
+function getRouteRegistry(): RawRouteEntry[] {
+  const g = globalThis as Record<symbol, unknown>;
+  const existing = g[ROUTE_SYMBOL];
+  if (existing === undefined) {
+    const r: RawRouteEntry[] = [];
+    g[ROUTE_SYMBOL] = r;
+    return r;
+  }
+  return existing as RawRouteEntry[];
+}
+
+function toArray(v: unknown): RouteHandlers {
+  return Array.isArray(v) ? (v as RouteHandlers) : [v];
+}
+
+/**
+ * routes module を path に紐付けて registry に登録する。
+ *
+ * 内部表現は `{ path, module }` の生のまま。 method 展開は `getRoutes` 時に行う
+ * (= server bundle が hibana-compiler を external dep に持たず globalThis 直叩きで
+ * push できる形式に揃えるため)。
+ */
+export function registerRoute(path: string, routeModule: RouteModule): void {
+  getRouteRegistry().push({ path, module: routeModule });
+}
+
+function expandMethods(module: RouteModule): Partial<Record<RouteMethod, RouteHandlers>> {
+  const methods: Partial<Record<RouteMethod, RouteHandlers>> = {};
+  for (const m of ROUTE_METHODS) {
+    const val = module[m];
+    if (val !== undefined) methods[m] = toArray(val);
+  }
+  // default = GET (省略時のみ。 named GET があればそちらが優先)
+  if (module.default !== undefined && methods.GET === undefined) {
+    methods.GET = toArray(module.default);
+  }
+  return methods;
+}
+
+/**
+ * registry の各 entry を `{ path, methods }` に展開して返す。
+ * handler を何も持たない module は出力に含めない。
+ */
+export function getRoutes(): RegisteredRoute[] {
+  const out: RegisteredRoute[] = [];
+  for (const { path, module } of getRouteRegistry()) {
+    const methods = expandMethods(module);
+    if (Object.keys(methods).length > 0) {
+      out.push({ path, methods });
+    }
+  }
+  return out;
+}
+
+/** routes registry を空にする (= test や short-scope build process で使う)。 */
+export function clearRoutes(): void {
+  const reg = getRouteRegistry();
+  reg.length = 0;
 }
 
 export interface LoadServerBundleOptions {
@@ -147,8 +238,10 @@ export async function withSsrContext<T>(fn: () => T | Promise<T>): Promise<T> {
   }
 
   const symG = g as Record<symbol, unknown>;
-  const prevRegistry = symG[ISLAND_SYMBOL];
+  const prevIslands = symG[ISLAND_SYMBOL];
+  const prevRoutes = symG[ROUTE_SYMBOL];
   symG[ISLAND_SYMBOL] = {};
+  symG[ROUTE_SYMBOL] = [];
 
   try {
     return await fn();
@@ -160,7 +253,9 @@ export async function withSsrContext<T>(fn: () => T | Promise<T>): Promise<T> {
       }
       domInstalled = false;
     }
-    if (prevRegistry === undefined) delete symG[ISLAND_SYMBOL];
-    else symG[ISLAND_SYMBOL] = prevRegistry;
+    if (prevIslands === undefined) delete symG[ISLAND_SYMBOL];
+    else symG[ISLAND_SYMBOL] = prevIslands;
+    if (prevRoutes === undefined) delete symG[ROUTE_SYMBOL];
+    else symG[ROUTE_SYMBOL] = prevRoutes;
   }
 }

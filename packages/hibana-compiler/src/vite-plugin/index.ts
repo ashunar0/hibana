@@ -3,6 +3,7 @@ import path from "node:path";
 import { build as viteBuild, type Plugin, type ResolvedConfig } from "vite";
 import { compile } from "../compiler/compile.ts";
 import { extractIslands } from "../extractor/extract-islands.ts";
+import { type RouteFileInfo, walkRoutes } from "../routes/index.ts";
 import { loadServerBundle, renderIsland, withSsrContext } from "../ssr/index.ts";
 
 /** ファイルが Pattern 3 syntax を含むかの短絡判定。 含まないなら transform skip。 */
@@ -67,6 +68,7 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
   const manifest: IslandManifest = {};
   const islandAbsPath: Record<string, string> = {};
   const chunkRefs = new Map<string, string>();
+  let routesInfo: RouteFileInfo[] = [];
   const manifestFileName = options.manifestFileName ?? "islands.json";
   let resolvedRoot = process.cwd();
   let outDir = "dist";
@@ -136,6 +138,12 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
           }
         }
       }
+
+      // app/routes/ も走査 (T31.0 file-based routing): walkRoutes が `app/routes/`
+      // 配下の .ts/.tsx を URL pattern 付きで返す。 underscored / dotdir は除外。
+      // dev / build 両方で populate (configureServer の dev routing は将来 T31.1+)、
+      // server bundle entry の生成時にここから import 文を emit する。
+      routesInfo = await walkRoutes(resolvedRoot);
     },
     configureServer(server) {
       // dev mode: /<manifestFileName> へのリクエストに manifest を JSON で return。
@@ -157,17 +165,36 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
       }
     },
     load(id) {
-      // server build entry: 全 island (interactive + static) を import + registry 登録する
-      // 1 ファイル。 子 vite.build({ ssr: true }) の input として使われる。
+      // server build entry: 全 island (interactive + static) + 全 route を import +
+      // 各 registry に登録する 1 ファイル。 子 vite.build({ ssr: true }) の input。
+      //
+      // registry 形式 (= ssr/index.ts と一致):
+      // - islands: `globalThis[Symbol.for("hibana.islands")]: Record<name, Component>`
+      // - routes:  `globalThis[Symbol.for("hibana.routes")]: Array<{ path, module }>`
+      //   `module` は `import * as` の namespace、 default / GET / POST 等を持つ。
+      //   getRoutes() 側で展開。
       if (id === RESOLVED_SERVER_ENTRY) {
         const names = Object.keys(islandAbsPath);
         const lines: string[] = [];
         for (const name of names) {
           lines.push(`import { ${name} } from ${JSON.stringify(islandAbsPath[name])};`);
         }
+        for (let i = 0; i < routesInfo.length; i++) {
+          const abs = path.resolve(resolvedRoot, routesInfo[i]!.source);
+          lines.push(`import * as __hbnRoute_${i} from ${JSON.stringify(abs)};`);
+        }
         lines.push('const __hbnReg = (globalThis[Symbol.for("hibana.islands")] ??= {});');
         for (const name of names) {
           lines.push(`__hbnReg[${JSON.stringify(name)}] = ${name};`);
+        }
+        if (routesInfo.length > 0) {
+          lines.push('const __hbnRoutes = (globalThis[Symbol.for("hibana.routes")] ??= []);');
+          for (let i = 0; i < routesInfo.length; i++) {
+            const r = routesInfo[i]!;
+            lines.push(
+              `__hbnRoutes.push({ path: ${JSON.stringify(r.pattern)}, module: __hbnRoute_${i} });`,
+            );
+          }
         }
         return { code: `${lines.join("\n")}\n`, moduleSideEffects: "no-treeshake" };
       }
