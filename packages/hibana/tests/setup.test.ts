@@ -1,10 +1,22 @@
-import { clearRoutes, registerRoute } from "hibana-compiler/ssr";
+import {
+  clearErrorPage,
+  clearMiddlewares,
+  clearNotFound,
+  clearRoutes,
+  registerErrorPage,
+  registerMiddleware,
+  registerNotFound,
+  registerRoute,
+} from "hibana-compiler/ssr";
 import { Hono } from "hono";
 import { afterEach, expect, test } from "vite-plus/test";
 import { setupHibana } from "../src/setup.ts";
 
 afterEach(() => {
   clearRoutes();
+  clearMiddlewares();
+  clearNotFound();
+  clearErrorPage();
 });
 
 test("setupHibana: registry の default export を GET に配線", async () => {
@@ -81,4 +93,68 @@ test("setupHibana: c.render middleware も install (Renderer 経由で HTML temp
   const html = await (await app.request("/")).text();
   expect(html.startsWith("<!doctype html>")).toBe(true);
   expect(html).toContain("<p>home</p>");
+});
+
+test("setupHibana: _middleware を mountPath で配線", async () => {
+  let seen = "";
+  registerMiddleware("/admin/*", {
+    default: async (c: { res: { headers: Headers } }, next: () => Promise<void>) => {
+      seen = "admin-mw";
+      await next();
+      c.res.headers.set("X-Admin", "yes");
+    },
+  });
+  registerRoute("/admin/panel", {
+    default: (c: { text: (s: string) => Response }) => c.text("panel"),
+  });
+  registerRoute("/public", {
+    default: (c: { text: (s: string) => Response }) => c.text("pub"),
+  });
+
+  const app = new Hono();
+  await setupHibana(app);
+
+  const r1 = await app.request("/admin/panel");
+  expect(await r1.text()).toBe("panel");
+  expect(r1.headers.get("X-Admin")).toBe("yes");
+  expect(seen).toBe("admin-mw");
+
+  seen = "";
+  const r2 = await app.request("/public");
+  expect(await r2.text()).toBe("pub");
+  expect(r2.headers.get("X-Admin")).toBeNull();
+  expect(seen).toBe(""); // /public は /admin/* に match しないので middleware 走らない
+});
+
+test("setupHibana: _404 が登録されてれば notFound に配線、 status 404", async () => {
+  registerNotFound({
+    default: () => "<p>not found</p>",
+  });
+
+  const app = new Hono();
+  await setupHibana(app);
+
+  const res = await app.request("/missing");
+  expect(res.status).toBe(404);
+  const html = await res.text();
+  expect(html).toContain("<p>not found</p>");
+});
+
+test("setupHibana: _error が登録されてれば onError に配線、 status 500 + error message を props で受ける", async () => {
+  registerErrorPage({
+    default: (props: { error: Error }) => `<p>error: ${props.error.message}</p>`,
+  });
+  registerRoute("/boom", {
+    default: () => {
+      throw new Error("kaboom");
+    },
+  });
+
+  const app = new Hono();
+  await setupHibana(app);
+
+  const res = await app.request("/boom");
+  expect(res.status).toBe(500);
+  const html = await res.text();
+  expect(html).toContain("<p>error: kaboom</p>");
 });

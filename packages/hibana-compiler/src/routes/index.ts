@@ -13,6 +13,18 @@ export interface LayoutFileInfo {
   source: string;
 }
 
+export interface MiddlewareFileInfo {
+  /** project root からの相対 path (例: "app/routes/admin/_middleware.ts") */
+  source: string;
+  /** Hono path pattern for `app.use` (例: "/admin/*"、 root は "/*") */
+  mountPath: string;
+}
+
+export interface SpecialFileInfo {
+  /** project root からの相対 path (例: "app/routes/_404.tsx") */
+  source: string;
+}
+
 /**
  * `<rootDir>/app/routes/_layout.{ts,tsx}` を探す (root layout のみ)。
  *
@@ -112,6 +124,108 @@ export function filePathToPattern(filePath: string): string | null {
     out.push(t);
   }
   return out.length === 0 ? "/" : "/" + out.join("/");
+}
+
+/**
+ * `<rootDir>/app/routes/` 配下を再帰 walk し、 各 directory の `_middleware.{ts,tsx}` を収集。
+ *
+ * mountPath は配置先 directory に応じて決まる:
+ * - `app/routes/_middleware.ts` → `/*`
+ * - `app/routes/admin/_middleware.ts` → `/admin/*`
+ * - `app/routes/admin/users/_middleware.ts` → `/admin/users/*`
+ *
+ * 並び順: depth ascending → 同 depth は path alphabetical。 outer → inner の順に register
+ * すると Hono の `app.use` の FIFO 順と組み合わせて期待通りの cascade になる。
+ */
+export async function walkMiddlewares(rootDir: string): Promise<MiddlewareFileInfo[]> {
+  const routesDir = path.join(rootDir, "app", "routes");
+  let isDir = false;
+  try {
+    const st = await fs.stat(routesDir);
+    isDir = st.isDirectory();
+  } catch {
+    isDir = false;
+  }
+  if (!isDir) return [];
+
+  const out: MiddlewareFileInfo[] = [];
+  await walkMwDir(rootDir, routesDir, routesDir, out);
+
+  // depth (= mountPath の "/" 数) ascending、 同 depth は alphabetical で安定化
+  out.sort((a, b) => {
+    const da = a.mountPath.split("/").length;
+    const db = b.mountPath.split("/").length;
+    if (da !== db) return da - db;
+    return a.mountPath.localeCompare(b.mountPath);
+  });
+  return out;
+}
+
+async function walkMwDir(
+  rootDir: string,
+  routesRoot: string,
+  current: string,
+  out: MiddlewareFileInfo[],
+): Promise<void> {
+  let entries: import("node:fs").Dirent[];
+  try {
+    entries = await fs.readdir(current, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  // この directory に _middleware が居れば 1 つ採用 (.tsx 優先)
+  for (const ext of ["tsx", "ts"]) {
+    const candidate = entries.find((e) => e.isFile() && e.name === `_middleware.${ext}`);
+    if (candidate) {
+      const abs = path.join(current, candidate.name);
+      const relFromRoutes = path.relative(routesRoot, current);
+      const mountPath = relFromRoutes ? "/" + relFromRoutes.split(path.sep).join("/") + "/*" : "/*";
+      out.push({
+        source: path.relative(rootDir, abs),
+        mountPath,
+      });
+      break;
+    }
+  }
+
+  for (const ent of entries) {
+    if (ent.name.startsWith(".") || ent.name === "node_modules") continue;
+    if (ent.isDirectory()) {
+      await walkMwDir(rootDir, routesRoot, path.join(current, ent.name), out);
+    }
+  }
+}
+
+/**
+ * `<rootDir>/app/routes/_404.{ts,tsx}` を探す (global not-found のみ、 nested は YAGNI で未対応)。
+ * `.tsx` を優先。 該当 file が無ければ null。
+ */
+export async function findNotFound(rootDir: string): Promise<SpecialFileInfo | null> {
+  return findRootSpecial(rootDir, "_404");
+}
+
+/**
+ * `<rootDir>/app/routes/_error.{ts,tsx}` を探す (global error page のみ、 nested は YAGNI)。
+ * `.tsx` を優先。 該当 file が無ければ null。
+ */
+export async function findErrorPage(rootDir: string): Promise<SpecialFileInfo | null> {
+  return findRootSpecial(rootDir, "_error");
+}
+
+async function findRootSpecial(rootDir: string, base: string): Promise<SpecialFileInfo | null> {
+  for (const ext of ["tsx", "ts"]) {
+    const abs = path.join(rootDir, "app", "routes", `${base}.${ext}`);
+    try {
+      const st = await fs.stat(abs);
+      if (st.isFile()) {
+        return { source: path.relative(rootDir, abs) };
+      }
+    } catch {
+      // not found
+    }
+  }
+  return null;
 }
 
 function transformSegment(seg: string): string | null {

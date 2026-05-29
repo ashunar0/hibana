@@ -2,7 +2,14 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vite-plus/test";
-import { filePathToPattern, findRootLayout, walkRoutes } from "../../src/routes/index.ts";
+import {
+  filePathToPattern,
+  findErrorPage,
+  findNotFound,
+  findRootLayout,
+  walkMiddlewares,
+  walkRoutes,
+} from "../../src/routes/index.ts";
 
 test("filePathToPattern: index.ts → /", () => {
   expect(filePathToPattern("index.ts")).toBe("/");
@@ -121,4 +128,53 @@ test("findRootLayout: .tsx と .ts が両方あれば .tsx 優先", async () => 
   await makeRoute("app/routes/_layout.ts");
   const info = await findRootLayout(tmpRoot);
   expect(info?.source).toBe(path.join("app", "routes", "_layout.tsx"));
+});
+
+test("walkMiddlewares: app/routes/ がなければ空配列", async () => {
+  expect(await walkMiddlewares(tmpRoot)).toEqual([]);
+});
+
+test("walkMiddlewares: root _middleware は mountPath /*", async () => {
+  await makeRoute("app/routes/_middleware.ts");
+  const out = await walkMiddlewares(tmpRoot);
+  expect(out).toHaveLength(1);
+  expect(out[0]?.mountPath).toBe("/*");
+});
+
+test("walkMiddlewares: nested _middleware は directory path + /*", async () => {
+  await makeRoute("app/routes/_middleware.ts");
+  await makeRoute("app/routes/admin/_middleware.ts");
+  await makeRoute("app/routes/admin/users/_middleware.ts");
+  const out = await walkMiddlewares(tmpRoot);
+  expect(out.map((m) => m.mountPath)).toEqual(["/*", "/admin/*", "/admin/users/*"]);
+});
+
+test("walkMiddlewares: depth ascending → 同 depth alphabetical で安定", async () => {
+  await makeRoute("app/routes/zeta/_middleware.ts");
+  await makeRoute("app/routes/alpha/_middleware.ts");
+  await makeRoute("app/routes/alpha/beta/_middleware.ts");
+  const out = await walkMiddlewares(tmpRoot);
+  expect(out.map((m) => m.mountPath)).toEqual(["/alpha/*", "/zeta/*", "/alpha/beta/*"]);
+});
+
+test("walkMiddlewares: .tsx と .ts が両方あれば .tsx 優先", async () => {
+  await makeRoute("app/routes/_middleware.tsx");
+  await makeRoute("app/routes/_middleware.ts");
+  const out = await walkMiddlewares(tmpRoot);
+  expect(out).toHaveLength(1);
+  expect(out[0]?.source).toContain("_middleware.tsx");
+});
+
+test("findNotFound: _404.{ts,tsx} を見つける、 無ければ null", async () => {
+  expect(await findNotFound(tmpRoot)).toBeNull();
+  await makeRoute("app/routes/_404.tsx");
+  const info = await findNotFound(tmpRoot);
+  expect(info?.source).toBe(path.join("app", "routes", "_404.tsx"));
+});
+
+test("findErrorPage: _error.{ts,tsx} を見つける、 無ければ null", async () => {
+  expect(await findErrorPage(tmpRoot)).toBeNull();
+  await makeRoute("app/routes/_error.tsx");
+  const info = await findErrorPage(tmpRoot);
+  expect(info?.source).toBe(path.join("app", "routes", "_error.tsx"));
 });

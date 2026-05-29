@@ -14,6 +14,9 @@ const DOM_KEYS = [
 const ISLAND_SYMBOL = Symbol.for("hibana.islands");
 const ROUTE_SYMBOL = Symbol.for("hibana.routes");
 const LAYOUT_SYMBOL = Symbol.for("hibana.layout");
+const MIDDLEWARE_SYMBOL = Symbol.for("hibana.middlewares");
+const NOT_FOUND_SYMBOL = Symbol.for("hibana.notFound");
+const ERROR_PAGE_SYMBOL = Symbol.for("hibana.errorPage");
 
 type IslandComponent = (props: Record<string, unknown>) => unknown;
 type IslandRegistry = Record<string, IslandComponent>;
@@ -176,6 +179,106 @@ export function clearLayout(): void {
   delete g[LAYOUT_SYMBOL];
 }
 
+/**
+ * middleware module の shape (= `export default MiddlewareHandler`)。
+ * `default` は MiddlewareHandler 1 つ、 もしくは配列。 配列は順番通り適用される。
+ */
+export interface MiddlewareModule {
+  default?: unknown;
+}
+
+export interface RegisteredMiddleware {
+  /** Hono `app.use` 用の pattern (= "/*", "/admin/*" 等) */
+  mountPath: string;
+  /** MiddlewareHandler 1 つ or 配列 (= toArray で正規化された配列) */
+  handlers: unknown[];
+}
+
+interface RawMiddlewareEntry {
+  mountPath: string;
+  module: MiddlewareModule;
+}
+
+function getMiddlewareRegistry(): RawMiddlewareEntry[] {
+  const g = globalThis as Record<symbol, unknown>;
+  const existing = g[MIDDLEWARE_SYMBOL];
+  if (existing === undefined) {
+    const r: RawMiddlewareEntry[] = [];
+    g[MIDDLEWARE_SYMBOL] = r;
+    return r;
+  }
+  return existing as RawMiddlewareEntry[];
+}
+
+/** middleware module を mountPath に紐付けて registry に push。 順序は register 順を保持。 */
+export function registerMiddleware(mountPath: string, module: MiddlewareModule): void {
+  getMiddlewareRegistry().push({ mountPath, module });
+}
+
+/** 登録された middleware を `{ mountPath, handlers[] }` 配列で返す。 default の無い module は skip。 */
+export function getMiddlewares(): RegisteredMiddleware[] {
+  const out: RegisteredMiddleware[] = [];
+  for (const { mountPath, module } of getMiddlewareRegistry()) {
+    if (module.default === undefined) continue;
+    out.push({ mountPath, handlers: toArray(module.default) });
+  }
+  return out;
+}
+
+export function clearMiddlewares(): void {
+  const reg = getMiddlewareRegistry();
+  reg.length = 0;
+}
+
+/**
+ * not-found / error page の module shape (= `export default Component`)。
+ * NotFound は引数なし、 ErrorPage は `{ error: Error }` を受ける。
+ */
+export interface SpecialPageModule {
+  default?: unknown;
+}
+
+export type NotFoundComponent = () => unknown;
+export type ErrorPageComponent = (props: { error: Error }) => unknown;
+
+/** not-found component module を登録 (= 1 つだけ、 上書き)。 */
+export function registerNotFound(module: SpecialPageModule): void {
+  const g = globalThis as Record<symbol, unknown>;
+  g[NOT_FOUND_SYMBOL] = module;
+}
+
+export function getNotFound(): NotFoundComponent | null {
+  const g = globalThis as Record<symbol, unknown>;
+  const module = g[NOT_FOUND_SYMBOL] as SpecialPageModule | undefined;
+  if (!module) return null;
+  const comp = module.default;
+  return typeof comp === "function" ? (comp as NotFoundComponent) : null;
+}
+
+export function clearNotFound(): void {
+  const g = globalThis as Record<symbol, unknown>;
+  delete g[NOT_FOUND_SYMBOL];
+}
+
+/** error page component module を登録 (= 1 つだけ、 上書き)。 */
+export function registerErrorPage(module: SpecialPageModule): void {
+  const g = globalThis as Record<symbol, unknown>;
+  g[ERROR_PAGE_SYMBOL] = module;
+}
+
+export function getErrorPage(): ErrorPageComponent | null {
+  const g = globalThis as Record<symbol, unknown>;
+  const module = g[ERROR_PAGE_SYMBOL] as SpecialPageModule | undefined;
+  if (!module) return null;
+  const comp = module.default;
+  return typeof comp === "function" ? (comp as ErrorPageComponent) : null;
+}
+
+export function clearErrorPage(): void {
+  const g = globalThis as Record<symbol, unknown>;
+  delete g[ERROR_PAGE_SYMBOL];
+}
+
 export interface LoadServerBundleOptions {
   /** 同一プロセス内で再 import が必要な場合 (build watch) に query を付けて ESM cache を回避 */
   cacheBust?: boolean;
@@ -277,9 +380,15 @@ export async function withSsrContext<T>(fn: () => T | Promise<T>): Promise<T> {
   const prevIslands = symG[ISLAND_SYMBOL];
   const prevRoutes = symG[ROUTE_SYMBOL];
   const prevLayout = symG[LAYOUT_SYMBOL];
+  const prevMiddlewares = symG[MIDDLEWARE_SYMBOL];
+  const prevNotFound = symG[NOT_FOUND_SYMBOL];
+  const prevErrorPage = symG[ERROR_PAGE_SYMBOL];
   symG[ISLAND_SYMBOL] = {};
   symG[ROUTE_SYMBOL] = [];
   delete symG[LAYOUT_SYMBOL];
+  symG[MIDDLEWARE_SYMBOL] = [];
+  delete symG[NOT_FOUND_SYMBOL];
+  delete symG[ERROR_PAGE_SYMBOL];
 
   try {
     return await fn();
@@ -297,5 +406,11 @@ export async function withSsrContext<T>(fn: () => T | Promise<T>): Promise<T> {
     else symG[ROUTE_SYMBOL] = prevRoutes;
     if (prevLayout === undefined) delete symG[LAYOUT_SYMBOL];
     else symG[LAYOUT_SYMBOL] = prevLayout;
+    if (prevMiddlewares === undefined) delete symG[MIDDLEWARE_SYMBOL];
+    else symG[MIDDLEWARE_SYMBOL] = prevMiddlewares;
+    if (prevNotFound === undefined) delete symG[NOT_FOUND_SYMBOL];
+    else symG[NOT_FOUND_SYMBOL] = prevNotFound;
+    if (prevErrorPage === undefined) delete symG[ERROR_PAGE_SYMBOL];
+    else symG[ERROR_PAGE_SYMBOL] = prevErrorPage;
   }
 }

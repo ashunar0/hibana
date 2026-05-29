@@ -4,9 +4,14 @@ import { build as viteBuild, type Plugin, type ResolvedConfig } from "vite";
 import { compile } from "../compiler/compile.ts";
 import { extractIslands } from "../extractor/extract-islands.ts";
 import {
+  findErrorPage,
+  findNotFound,
   findRootLayout,
   type LayoutFileInfo,
+  type MiddlewareFileInfo,
   type RouteFileInfo,
+  type SpecialFileInfo,
+  walkMiddlewares,
   walkRoutes,
 } from "../routes/index.ts";
 import { loadServerBundle, renderIsland, withSsrContext } from "../ssr/index.ts";
@@ -78,6 +83,9 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
   const chunkRefs = new Map<string, string>();
   let routesInfo: RouteFileInfo[] = [];
   let layoutInfo: LayoutFileInfo | null = null;
+  let middlewaresInfo: MiddlewareFileInfo[] = [];
+  let notFoundInfo: SpecialFileInfo | null = null;
+  let errorPageInfo: SpecialFileInfo | null = null;
   const manifestFileName = options.manifestFileName ?? "islands.json";
   let resolvedRoot = process.cwd();
   let outDir = "dist";
@@ -154,6 +162,9 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
       // server bundle entry の生成時にここから import 文を emit する。
       routesInfo = await walkRoutes(resolvedRoot);
       layoutInfo = await findRootLayout(resolvedRoot);
+      middlewaresInfo = await walkMiddlewares(resolvedRoot);
+      notFoundInfo = await findNotFound(resolvedRoot);
+      errorPageInfo = await findErrorPage(resolvedRoot);
     },
     configureServer(server) {
       // dev mode: /<manifestFileName> へのリクエストに manifest を JSON で return。
@@ -197,6 +208,18 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
           const abs = path.resolve(resolvedRoot, layoutInfo.source);
           lines.push(`import * as __hbnLayout from ${JSON.stringify(abs)};`);
         }
+        for (let i = 0; i < middlewaresInfo.length; i++) {
+          const abs = path.resolve(resolvedRoot, middlewaresInfo[i]!.source);
+          lines.push(`import * as __hbnMw_${i} from ${JSON.stringify(abs)};`);
+        }
+        if (notFoundInfo) {
+          const abs = path.resolve(resolvedRoot, notFoundInfo.source);
+          lines.push(`import * as __hbnNotFound from ${JSON.stringify(abs)};`);
+        }
+        if (errorPageInfo) {
+          const abs = path.resolve(resolvedRoot, errorPageInfo.source);
+          lines.push(`import * as __hbnErrorPage from ${JSON.stringify(abs)};`);
+        }
         lines.push('const __hbnReg = (globalThis[Symbol.for("hibana.islands")] ??= {});');
         for (const name of names) {
           lines.push(`__hbnReg[${JSON.stringify(name)}] = ${name};`);
@@ -212,6 +235,21 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
         }
         if (layoutInfo) {
           lines.push('globalThis[Symbol.for("hibana.layout")] = __hbnLayout;');
+        }
+        if (middlewaresInfo.length > 0) {
+          lines.push('const __hbnMws = (globalThis[Symbol.for("hibana.middlewares")] ??= []);');
+          for (let i = 0; i < middlewaresInfo.length; i++) {
+            const m = middlewaresInfo[i]!;
+            lines.push(
+              `__hbnMws.push({ mountPath: ${JSON.stringify(m.mountPath)}, module: __hbnMw_${i} });`,
+            );
+          }
+        }
+        if (notFoundInfo) {
+          lines.push('globalThis[Symbol.for("hibana.notFound")] = __hbnNotFound;');
+        }
+        if (errorPageInfo) {
+          lines.push('globalThis[Symbol.for("hibana.errorPage")] = __hbnErrorPage;');
         }
         return { code: `${lines.join("\n")}\n`, moduleSideEffects: "no-treeshake" };
       }
