@@ -127,6 +127,49 @@ test('setupHibana: cssEntries 未指定なら <link rel="stylesheet"> は emit �
   expect(html).not.toContain('rel="stylesheet"');
 });
 
+test("setupHibana: partialHeader 指定済 + request にその header がある → fragment 直返し (= layout/HTML template wrap 省略)", async () => {
+  registerRoute("/", {
+    default: (c: { render: (s: string) => Response }) => c.render("<p>home</p>"),
+  });
+
+  const app = new Hono();
+  await setupHibana(app, { partialHeader: "X-Hibana-Partial" });
+
+  const res = await app.request("/", { headers: { "X-Hibana-Partial": "main" } });
+  const body = await res.text();
+  expect(res.status).toBe(200);
+  expect(body).toBe("<p>home</p>");
+  expect(body.startsWith("<!doctype")).toBe(false);
+  expect(body).not.toContain("<html");
+  expect(body).not.toContain("<body>");
+});
+
+test("setupHibana: partialHeader 指定済 + request に header なし → 従来 full HTML", async () => {
+  registerRoute("/", {
+    default: (c: { render: (s: string) => Response }) => c.render("<p>home</p>"),
+  });
+
+  const app = new Hono();
+  await setupHibana(app, { partialHeader: "X-Hibana-Partial" });
+
+  const html = await (await app.request("/")).text();
+  expect(html.startsWith("<!doctype html>")).toBe(true);
+  expect(html).toContain("<p>home</p>");
+});
+
+test("setupHibana: partialHeader 未指定なら header があっても full HTML 維持", async () => {
+  registerRoute("/", {
+    default: (c: { render: (s: string) => Response }) => c.render("<p>home</p>"),
+  });
+
+  const app = new Hono();
+  await setupHibana(app);
+
+  const html = await (await app.request("/", { headers: { "X-Hibana-Partial": "main" } })).text();
+  expect(html.startsWith("<!doctype html>")).toBe(true);
+  expect(html).toContain("<p>home</p>");
+});
+
 test("setupHibana: _middleware を mountPath で配線", async () => {
   let seen = "";
   registerMiddleware("/admin/*", {

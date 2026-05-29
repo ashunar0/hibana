@@ -16,6 +16,7 @@ await setupHibana(app, {
   clientEntry: "/assets/index.js",
   manifestPath: "/islands.json",
   cssEntries: ["/assets/index.css"],
+  partialHeader: "X-Hibana-Partial",
 });
 
 const port = Number(process.env.PORT ?? 3100);

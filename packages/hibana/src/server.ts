@@ -18,6 +18,14 @@ export interface HibanaMiddlewareOptions {
   serverBundlePath?: string;
   /** head に <link rel="stylesheet"> として inject する CSS entry の URL 配列 (例: `["/assets/index.css"]`) */
   cssEntries?: string[];
+  /**
+   * partial response (= layout / HTML template wrap を skip して fragment 直返し) の有効化と判定 header 名。
+   * 指定すると middleware が `c.req.header(partialHeader)` が truthy のとき、 layout wrap も
+   * doctype/head/body wrap も省略して `fillIslands(content)` の HTML fragment だけ text/html で返す。
+   * client side の navigate helper が「shell を再 render しない / 既存 <main> を innerHTML 差し替え」 path
+   * を実装するための server side support。 未指定なら全 request が従来 full HTML。
+   */
+  partialHeader?: string;
 }
 
 function renderHtml(
@@ -105,6 +113,11 @@ export function hibana(options: HibanaMiddlewareOptions = {}): MiddlewareHandler
   return async (c, next) => {
     await initPromise;
     c.setRenderer((content) => {
+      // partial 要求 = layout wrap / HTML template wrap を省略、 fragment 直返し
+      // (= client navigate helper が <main> innerHTML に差し込む path 用)。
+      if (options.partialHeader && c.req.header(options.partialHeader)) {
+        return c.html(fillIslands(content));
+      }
       // layout が登録されてれば content を children として wrap (= `<header/>{content}<footer/>`)。
       // 未登録なら content をそのまま body 内側として template wrap。
       const layout = getLayout();
