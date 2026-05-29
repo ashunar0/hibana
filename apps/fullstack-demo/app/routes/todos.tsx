@@ -5,8 +5,14 @@ import { addTodo, listTodos } from "../../src/server/todos-store.ts";
 
 const wantsJson = (c) => (c.req.header("Accept") ?? "").includes("application/json");
 
-// GET /todos = TodoList page
-export default createRoute((c) => c.render(<TodoListPage todos={listTodos()} />));
+// GET /todos = TodoList page (Accept: application/json なら JSON list = SPA Resource fetch 用)
+export default createRoute((c) => {
+  const todos = listTodos();
+  if (wantsJson(c)) {
+    return c.json({ todos });
+  }
+  return c.render(<TodoListPage todos={todos} />);
+});
 
 // POST /todos = add (form action / fetch 両対応)
 export const POST = createRoute(async (c) => {

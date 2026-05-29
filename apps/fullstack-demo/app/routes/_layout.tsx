@@ -9,6 +9,8 @@ export default component RootLayout(props) {
         {" | "}
         <a href="/todos">todos</a>
         {" | "}
+        <a href="/todos-spa">todos (SPA)</a>
+        {" | "}
         <a href="/about">about</a>
       </nav>
     </header>

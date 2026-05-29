@@ -53,7 +53,7 @@ export async function mountIslands(opts: MountIslandsOptions = {}): Promise<void
     return;
   }
 
-  // wave 単位で繰り返す:
+  // wave 単位で繰り返す (初期の sync nesting 対応):
   //   - replaceWith path (非 SSR): el が DOM から消えて中身が新規 placeholder を含む可能性
   //   - hydrate path (SSR 済): el は残るが `data-hydrated` を立てて selector で除外、
   //     hydrate 中に jsx で子 `<hbn-island>` element を採用するが内部は触らない
@@ -63,13 +63,48 @@ export async function mountIslands(opts: MountIslandsOptions = {}): Promise<void
     const placeholders = Array.from(
       document.querySelectorAll<HTMLElement>("hbn-island[name]:not([data-hydrated])"),
     );
-    if (placeholders.length === 0) return;
+    if (placeholders.length === 0) break;
     await Promise.all(placeholders.map((el) => hydrateOne(el, manifest)));
   }
-  console.warn("[hibana] mountIslands: hit recursion bound (10 waves); leftover placeholders");
+
+  // async-appearing islands (= Resource fetch 後に親 island が <hbn-island/> を追加する等)
+  // を持続監視。 MutationObserver で childList + subtree、 新規 placeholder を見つけたら
+  // hydrateOne を発火。 wave loop 終了後の async path 専用なので disconnect しない (page lifetime)。
+  observeAsyncIslands(manifest);
+}
+
+function observeAsyncIslands(manifest: IslandManifest): void {
+  // SSR / vitest 等で MutationObserver が無い環境では何もしない (= 既存挙動維持)
+  if (typeof MutationObserver === "undefined") return;
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of Array.from(mutation.addedNodes)) {
+        if (!(node instanceof Element)) continue;
+        // self が placeholder
+        if (
+          node.tagName.toLowerCase() === "hbn-island" &&
+          node.hasAttribute("name") &&
+          !node.hasAttribute("data-hydrated")
+        ) {
+          void hydrateOne(node as HTMLElement, manifest);
+        }
+        // descendant placeholder も拾う (= まとめて wrapper fragment が挿入される case)
+        const inner = (node as Element).querySelectorAll?.<HTMLElement>(
+          "hbn-island[name]:not([data-hydrated])",
+        );
+        if (inner) {
+          for (const el of Array.from(inner)) void hydrateOne(el, manifest);
+        }
+      }
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
 }
 
 async function hydrateOne(el: HTMLElement, manifest: IslandManifest): Promise<void> {
+  // idempotency guard: wave loop と MutationObserver の両方が同じ element を拾う race を防ぐ。
+  // hydrateInto が二重に走ると event handler が重複 attach される。
+  if (el.hasAttribute("data-hydrated")) return;
   const name = el.getAttribute("name");
   if (!name) return;
   const entry = manifest[name];
