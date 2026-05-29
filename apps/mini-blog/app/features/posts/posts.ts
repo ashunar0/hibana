@@ -44,8 +44,17 @@ const POSTS: Post[] = [
   },
 ];
 
+export type PostSummary = Omit<Post, "body">;
+
 export function listPosts(): Post[] {
   return [...POSTS].sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
+// 一覧 / 検索用 = body を落とす。 SearchBox island の data-props に焼き込まれる
+// payload を絞る (= 一覧 page で body は使わない、 詳細 page で /posts/:slug
+// が body を持つ Post を返す)。
+export function listPostsForIndex(): PostSummary[] {
+  return listPosts().map(({ body: _body, ...rest }) => rest);
 }
 
 export function findPost(slug: string): Post | null {

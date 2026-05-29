@@ -1,7 +1,8 @@
 // @ts-nocheck
 import { createRoute } from "hibana/factory";
 import { HomePage } from "../features/posts/HomePage.tsx";
-import { listPosts } from "../features/posts/posts.ts";
+import { listPostsForIndex } from "../features/posts/posts.ts";
 
-// GET / = 記事一覧。 server で listPosts() を取って props 経由で page に渡すだけ。
-export default createRoute((c) => c.render(<HomePage posts={listPosts()} />));
+// GET / = 記事一覧。 SearchBox island の data-props に焼き込むので、 body を
+// 落とした summary 型 (= listPostsForIndex) を渡して client 配信 payload を絞る。
+export default createRoute((c) => c.render(<HomePage posts={listPostsForIndex()} />));
