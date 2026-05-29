@@ -8,6 +8,32 @@ export interface RouteFileInfo {
   pattern: string;
 }
 
+export interface LayoutFileInfo {
+  /** project root からの相対 path (例: "app/routes/_layout.tsx") */
+  source: string;
+}
+
+/**
+ * `<rootDir>/app/routes/_layout.{ts,tsx}` を探す (root layout のみ)。
+ *
+ * nested layout (`/blog/_layout.tsx` 等) は YAGNI で T31.1+ に温存。
+ * 該当 file が無ければ `null`。
+ */
+export async function findRootLayout(rootDir: string): Promise<LayoutFileInfo | null> {
+  for (const ext of ["tsx", "ts"]) {
+    const abs = path.join(rootDir, "app", "routes", `_layout.${ext}`);
+    try {
+      const st = await fs.stat(abs);
+      if (st.isFile()) {
+        return { source: path.relative(rootDir, abs) };
+      }
+    } catch {
+      // not found
+    }
+  }
+  return null;
+}
+
 /**
  * `<rootDir>/app/routes/` 配下を再帰 walk し、 各 `.ts` / `.tsx` を route として収集。
  *

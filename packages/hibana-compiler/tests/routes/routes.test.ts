@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vite-plus/test";
-import { filePathToPattern, walkRoutes } from "../../src/routes/index.ts";
+import { filePathToPattern, findRootLayout, walkRoutes } from "../../src/routes/index.ts";
 
 test("filePathToPattern: index.ts → /", () => {
   expect(filePathToPattern("index.ts")).toBe("/");
@@ -97,4 +97,28 @@ test("walkRoutes: .ts / .tsx 以外は無視", async () => {
 
   const out = await walkRoutes(tmpRoot);
   expect(out.map((r) => r.pattern)).toEqual(["/"]);
+});
+
+test("findRootLayout: app/routes/_layout.tsx が無ければ null", async () => {
+  expect(await findRootLayout(tmpRoot)).toBeNull();
+});
+
+test("findRootLayout: _layout.tsx を見つけたら source を返す", async () => {
+  await makeRoute("app/routes/_layout.tsx");
+  const info = await findRootLayout(tmpRoot);
+  expect(info).not.toBeNull();
+  expect(info?.source).toBe(path.join("app", "routes", "_layout.tsx"));
+});
+
+test("findRootLayout: _layout.ts (no x) も拾う", async () => {
+  await makeRoute("app/routes/_layout.ts");
+  const info = await findRootLayout(tmpRoot);
+  expect(info?.source).toBe(path.join("app", "routes", "_layout.ts"));
+});
+
+test("findRootLayout: .tsx と .ts が両方あれば .tsx 優先", async () => {
+  await makeRoute("app/routes/_layout.tsx");
+  await makeRoute("app/routes/_layout.ts");
+  const info = await findRootLayout(tmpRoot);
+  expect(info?.source).toBe(path.join("app", "routes", "_layout.tsx"));
 });

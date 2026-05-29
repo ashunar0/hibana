@@ -13,9 +13,18 @@ const DOM_KEYS = [
 
 const ISLAND_SYMBOL = Symbol.for("hibana.islands");
 const ROUTE_SYMBOL = Symbol.for("hibana.routes");
+const LAYOUT_SYMBOL = Symbol.for("hibana.layout");
 
 type IslandComponent = (props: Record<string, unknown>) => unknown;
 type IslandRegistry = Record<string, IslandComponent>;
+
+/** layout module の shape (= `export default RootLayout`) */
+export interface LayoutModule {
+  default?: unknown;
+}
+
+/** layout component の型 (= props.children を受け取って Node を返す) */
+export type LayoutComponent = (props: { children: unknown }) => unknown;
 
 export type RouteMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS" | "HEAD";
 
@@ -140,6 +149,33 @@ export function clearRoutes(): void {
   reg.length = 0;
 }
 
+/**
+ * root layout module を登録する (= `app/routes/_layout.{ts,tsx}`)。
+ *
+ * 既に登録されていれば上書き。 nested layout は YAGNI で未サポート。
+ */
+export function registerLayout(module: LayoutModule): void {
+  const g = globalThis as Record<symbol, unknown>;
+  g[LAYOUT_SYMBOL] = module;
+}
+
+/**
+ * 登録された layout component (= module.default) を返す。 未登録なら null。
+ */
+export function getLayout(): LayoutComponent | null {
+  const g = globalThis as Record<symbol, unknown>;
+  const module = g[LAYOUT_SYMBOL] as LayoutModule | undefined;
+  if (!module) return null;
+  const comp = module.default;
+  return typeof comp === "function" ? (comp as LayoutComponent) : null;
+}
+
+/** layout registry を unset する (= test 等で使う)。 */
+export function clearLayout(): void {
+  const g = globalThis as Record<symbol, unknown>;
+  delete g[LAYOUT_SYMBOL];
+}
+
 export interface LoadServerBundleOptions {
   /** 同一プロセス内で再 import が必要な場合 (build watch) に query を付けて ESM cache を回避 */
   cacheBust?: boolean;
@@ -240,8 +276,10 @@ export async function withSsrContext<T>(fn: () => T | Promise<T>): Promise<T> {
   const symG = g as Record<symbol, unknown>;
   const prevIslands = symG[ISLAND_SYMBOL];
   const prevRoutes = symG[ROUTE_SYMBOL];
+  const prevLayout = symG[LAYOUT_SYMBOL];
   symG[ISLAND_SYMBOL] = {};
   symG[ROUTE_SYMBOL] = [];
+  delete symG[LAYOUT_SYMBOL];
 
   try {
     return await fn();
@@ -257,5 +295,7 @@ export async function withSsrContext<T>(fn: () => T | Promise<T>): Promise<T> {
     else symG[ISLAND_SYMBOL] = prevIslands;
     if (prevRoutes === undefined) delete symG[ROUTE_SYMBOL];
     else symG[ROUTE_SYMBOL] = prevRoutes;
+    if (prevLayout === undefined) delete symG[LAYOUT_SYMBOL];
+    else symG[LAYOUT_SYMBOL] = prevLayout;
   }
 }

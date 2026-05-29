@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from "hono";
-import { ensureDom, loadServerBundle, renderIsland } from "hibana-compiler/ssr";
+import { ensureDom, getLayout, loadServerBundle, renderIsland } from "hibana-compiler/ssr";
 
 declare module "hono" {
   interface ContextRenderer {
@@ -98,7 +98,11 @@ export function hibana(options: HibanaMiddlewareOptions = {}): MiddlewareHandler
   return async (c, next) => {
     await initPromise;
     c.setRenderer((content) => {
-      const inner = fillIslands(content);
+      // layout が登録されてれば content を children として wrap (= `<header/>{content}<footer/>`)。
+      // 未登録なら content をそのまま body 内側として template wrap。
+      const layout = getLayout();
+      const wrapped = layout !== null ? (layout({ children: content }) as Node | string) : content;
+      const inner = fillIslands(wrapped);
       return c.html(renderHtml(inner, resolved));
     });
     await next();

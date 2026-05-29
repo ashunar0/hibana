@@ -12,7 +12,9 @@ export default defineConfig({
           !f.endsWith("pattern3-demo.tsx") &&
           !f.endsWith("quiz-hsx/src/App.tsx") &&
           !f.includes("island-demo/src/") &&
-          !f.includes("fullstack-demo/src/"),
+          !f.includes("fullstack-demo/src/") &&
+          !f.endsWith("fullstack-demo/app/routes/index.tsx") &&
+          !f.endsWith("fullstack-demo/app/routes/_layout.tsx"),
       );
       if (filtered.length === 0) return [];
       return [`vp check --fix ${filtered.map((f) => `"${f}"`).join(" ")}`];

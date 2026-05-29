@@ -1,8 +1,12 @@
 import { Hono } from "hono";
 import { jsx } from "hibana-core/jsx-runtime";
-import { registerIsland } from "hibana-compiler/ssr";
-import { expect, test } from "vite-plus/test";
+import { clearLayout, registerIsland, registerLayout } from "hibana-compiler/ssr";
+import { afterEach, expect, test } from "vite-plus/test";
 import { hibana } from "../src/server.ts";
+
+afterEach(() => {
+  clearLayout();
+});
 
 function createApp(options?: Parameters<typeof hibana>[0]) {
   const app = new Hono();
@@ -112,4 +116,36 @@ test("nested element produces correct outerHTML", async () => {
 
   const html = await (await app.request("/")).text();
   expect(html).toContain("<main><article><h2>T</h2><p>body</p></article></main>");
+});
+
+test("layout が登録されてれば content を children として wrap する", async () => {
+  // layout = (props) => <div class="wrap"><header>nav</header>{props.children}<footer>©</footer></div>
+  // oxlint-disable-next-line typescript/no-explicit-any -- jsx の children 型に props.children を渡すための test 内 cast
+  const Layout = (props: { children: any }) =>
+    jsx("div", {
+      class: "wrap",
+      children: [
+        jsx("header", { children: "nav" }),
+        props.children,
+        jsx("footer", { children: "©" }),
+      ],
+    });
+  registerLayout({ default: Layout });
+
+  const app = createApp();
+  app.get("/", (c) => c.render(jsx("h1", { children: "page" })));
+
+  const html = await (await app.request("/")).text();
+  expect(html).toContain(
+    '<div class="wrap"><header>nav</header><h1>page</h1><footer>©</footer></div>',
+  );
+});
+
+test("layout なし時は content をそのまま wrap (= 既存挙動)", async () => {
+  // clearLayout は afterEach で実行、 ここでは layout 未登録の状態
+  const app = createApp();
+  app.get("/", (c) => c.render(jsx("h1", { children: "no layout" })));
+
+  const html = await (await app.request("/")).text();
+  expect(html).toContain("<body><h1>no layout</h1></body>");
 });

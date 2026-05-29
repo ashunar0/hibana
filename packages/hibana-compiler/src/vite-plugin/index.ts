@@ -3,7 +3,12 @@ import path from "node:path";
 import { build as viteBuild, type Plugin, type ResolvedConfig } from "vite";
 import { compile } from "../compiler/compile.ts";
 import { extractIslands } from "../extractor/extract-islands.ts";
-import { type RouteFileInfo, walkRoutes } from "../routes/index.ts";
+import {
+  findRootLayout,
+  type LayoutFileInfo,
+  type RouteFileInfo,
+  walkRoutes,
+} from "../routes/index.ts";
 import { loadServerBundle, renderIsland, withSsrContext } from "../ssr/index.ts";
 
 /** ファイルが Pattern 3 syntax を含むかの短絡判定。 含まないなら transform skip。 */
@@ -58,6 +63,9 @@ async function walkTsx(dir: string): Promise<string[]> {
     if (ent.isDirectory()) {
       out.push(...(await walkTsx(full)));
     } else if (ent.isFile() && ent.name.endsWith(".tsx")) {
+      // underscored file (= `_layout.tsx` 等の特殊 file) は island 候補から除外、
+      // routes walker (findRootLayout 等) が別 path で扱う。
+      if (ent.name.startsWith("_")) continue;
       out.push(full);
     }
   }
@@ -69,6 +77,7 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
   const islandAbsPath: Record<string, string> = {};
   const chunkRefs = new Map<string, string>();
   let routesInfo: RouteFileInfo[] = [];
+  let layoutInfo: LayoutFileInfo | null = null;
   const manifestFileName = options.manifestFileName ?? "islands.json";
   let resolvedRoot = process.cwd();
   let outDir = "dist";
@@ -144,6 +153,7 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
       // dev / build 両方で populate (configureServer の dev routing は将来 T31.1+)、
       // server bundle entry の生成時にここから import 文を emit する。
       routesInfo = await walkRoutes(resolvedRoot);
+      layoutInfo = await findRootLayout(resolvedRoot);
     },
     configureServer(server) {
       // dev mode: /<manifestFileName> へのリクエストに manifest を JSON で return。
@@ -183,6 +193,10 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
           const abs = path.resolve(resolvedRoot, routesInfo[i]!.source);
           lines.push(`import * as __hbnRoute_${i} from ${JSON.stringify(abs)};`);
         }
+        if (layoutInfo) {
+          const abs = path.resolve(resolvedRoot, layoutInfo.source);
+          lines.push(`import * as __hbnLayout from ${JSON.stringify(abs)};`);
+        }
         lines.push('const __hbnReg = (globalThis[Symbol.for("hibana.islands")] ??= {});');
         for (const name of names) {
           lines.push(`__hbnReg[${JSON.stringify(name)}] = ${name};`);
@@ -195,6 +209,9 @@ export function hibana(options: HibanaPluginOptions = {}): Plugin {
               `__hbnRoutes.push({ path: ${JSON.stringify(r.pattern)}, module: __hbnRoute_${i} });`,
             );
           }
+        }
+        if (layoutInfo) {
+          lines.push('globalThis[Symbol.for("hibana.layout")] = __hbnLayout;');
         }
         return { code: `${lines.join("\n")}\n`, moduleSideEffects: "no-treeshake" };
       }
